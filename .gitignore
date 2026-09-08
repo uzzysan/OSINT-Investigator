@@ -1,0 +1,37 @@
+# --- secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# --- rust ---
+target/
+**/*.rs.bk
+
+# --- node / web ---
+node_modules/
+web/dist/
+.vite/
+*.tsbuildinfo
+
+# --- runtime data ---
+data/
+runtime/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+blobs/
+uploads/
+
+# --- backups produced by tooling ---
+.backups/
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
