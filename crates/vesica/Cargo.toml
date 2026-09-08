@@ -1,0 +1,23 @@
+[package]
+name = "vesica"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Vesica: single-binary self-hosted investigative knowledge graph. Config, wiring, CLI subcommands."
+
+[[bin]]
+name = "vesica"
+path = "src/main.rs"
+
+[dependencies]
+vesica-api = { path = "../vesica-api" }
+vesica-mcp = { path = "../vesica-mcp" }
+
+tokio.workspace = true
+clap.workspace = true
+figment.workspace = true
+rust-embed.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

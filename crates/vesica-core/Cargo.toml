@@ -1,0 +1,15 @@
+[package]
+name = "vesica-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Pure domain layer: schema registry, property types, normalisation, validation, IDs. No I/O, no internal crate dependencies."
+
+[dependencies]
+# Intentionally empty. vesica-core depends on no other workspace crate and
+# performs no I/O (no sqlx, no tokio, no axum, no filesystem, no network) —
+# see AGENT-BRIEF.md and 03-architecture.md section 3.3/3.4. Later tickets
+# that give this crate real behaviour (schema registry, normalisation,
+# validation) will add non-I/O dependencies here as needed; adding any
+# workspace-crate or I/O dependency is what `just check-deps` exists to catch.

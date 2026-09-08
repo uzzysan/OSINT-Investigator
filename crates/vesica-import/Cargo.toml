@@ -1,0 +1,15 @@
+[package]
+name = "vesica-import"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Bulk ingestion: CSV/XLSX/FollowTheMoney import with column mapping and dry-run."
+
+[dependencies]
+vesica-core = { path = "../vesica-core" }
+
+serde.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

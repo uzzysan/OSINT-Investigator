@@ -1,0 +1,18 @@
+[package]
+name = "vesica-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "SQLite persistence: sqlx repositories, migrations, FTS5, graph queries."
+
+[dependencies]
+vesica-core = { path = "../vesica-core" }
+
+sqlx.workspace = true
+tokio.workspace = true
+serde.workspace = true
+chrono.workspace = true
+ulid.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "vesica-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "rmcp MCP server: tools, resources and prompts for AI agents exploring and writing case data."
+
+[dependencies]
+vesica-store = { path = "../vesica-store" }
+vesica-resolve = { path = "../vesica-resolve" }
+vesica-import = { path = "../vesica-import" }
+vesica-report = { path = "../vesica-report" }
+
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

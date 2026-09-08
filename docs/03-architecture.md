@@ -85,7 +85,11 @@ vesica-core → nothing internal
 ```
 
 `vesica-core` must stay I/O-free so the domain rules are testable without a
-database. Everything the API can do, MCP can do, because both call the same
+database. **`vesica-resolve` is I/O-free for the same reason**: it owns blocking
+keys and the scorer as pure functions, and the background worker that drains the
+`match_job` queue and writes candidates lives in the service layer, which already
+depends on both the resolver and the store. This keeps the part with the
+interesting logic testable against a fixture set rather than against a database. Everything the API can do, MCP can do, because both call the same
 service functions rather than each other.
 
 ## 3.4 Crate-by-crate

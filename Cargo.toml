@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vesica-core",
+    "crates/vesica-store",
+    "crates/vesica-resolve",
+    "crates/vesica-api",
+    "crates/vesica-mcp",
+    "crates/vesica-report",
+    "crates/vesica-import",
+    "crates/vesica",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+# license: undecided. Do not set a license key until this is settled — see
+# AGENT-BRIEF.md / ticket 0001-01. TODO(licensing): pick and set a license.
+publish = false
+
+# Shared dependency versions, declared once and referenced by member crates as
+# `dep.workspace = true`. Never pin a different version of one of these inside
+# a member crate — see AGENT-BRIEF.md, "Toolchain and dependency policy".
+[workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal"] }
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+chrono = { version = "0.4", features = ["serde"] }
+ulid = { version = "1", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+figment = { version = "0.10", features = ["env"] }
+rust-embed = "8"

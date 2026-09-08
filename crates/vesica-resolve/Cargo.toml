@@ -1,0 +1,14 @@
+[package]
+name = "vesica-resolve"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Cross-case entity resolution: blocking keys, similarity scoring, candidate queue."
+
+[dependencies]
+vesica-core = { path = "../vesica-core" }
+
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

@@ -1,0 +1,22 @@
+[package]
+name = "vesica-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "axum HTTP layer: REST handlers, DTOs, OpenAPI, SSE, upload handling."
+
+[dependencies]
+vesica-store = { path = "../vesica-store" }
+vesica-resolve = { path = "../vesica-resolve" }
+vesica-import = { path = "../vesica-import" }
+vesica-report = { path = "../vesica-report" }
+
+axum.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
