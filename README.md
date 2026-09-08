@@ -66,6 +66,7 @@ See [`docs/08-deployment.md`](docs/08-deployment.md).
 | [`docs/07-mcp-server.md`](docs/07-mcp-server.md) | MCP tools, resources, prompts |
 | [`docs/08-deployment.md`](docs/08-deployment.md) | install.sh, systemd, ports, backup |
 | [`docs/09-security-and-legal.md`](docs/09-security-and-legal.md) | Threat model, data hygiene, GDPR notes |
+| [`docs/10-design-system.md`](docs/10-design-system.md) | Tokens, type, components, motion, mobile, a11y |
 | [`docs/adr/`](docs/adr/) | Architecture decision records |
 | [`docs/specs/`](docs/specs/) | Agent-ready implementation specs |
 | [`PLAN.md`](PLAN.md) | Living development plan — done vs. remaining |

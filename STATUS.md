@@ -5,6 +5,28 @@ resume without archaeology.
 
 ---
 
+## 2026-09-08 (design) — Design system
+
+**Done**
+
+- [`docs/10-design-system.md`](docs/10-design-system.md): principles, colour
+  tokens for both themes with measured contrast, three-family type system and
+  scale, spacing/radius/elevation, component rules, graph canvas rules, motion
+  tokens, responsive and mobile, accessibility, implementation notes.
+- A design canvas saved as an artifact with nine artboards across two pages:
+  brand, colour, typography, components, motion; then the workspace at 1440×900
+  in dark and light, and two mobile screens at 390×844.
+- Direction: IBM Plex Sans/Mono with Instrument Serif for display; signal cyan +
+  attention amber accents at one lightness and chroma; dark primary.
+
+**Notes**
+
+- Two alternate accent directions are drawn on the colour sheet in case cyan +
+  amber does not land. Swapping is a token change.
+- The wordmark is provisional pending the naming decision (ticket 003).
+
+---
+
 ## 2026-09-08 (later still) — Spec 0001 broken into tickets
 
 **Done**

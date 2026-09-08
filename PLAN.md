@@ -51,6 +51,7 @@ does nothing. Everything after this is filling it in.*
 - [x] `.gitignore`, `.env.example`, git repository initialised
 - [x] [Spec 0001](docs/specs/0001-foundation-and-domain-core.md) written for M0 + M1 (75 user stories, seams chosen)
 - [x] Spec 0001 broken into [15 agent-ready tickets](docs/specs/0001/issues/) with blocking edges
+- [x] [Design system](docs/10-design-system.md) — brand mark, light/dark tokens, type scale, components, motion, mobile
 - [ ] Cargo workspace with the eight crates from `docs/03-architecture.md`
 - [ ] `osintd` binary: config loading from env + `.env`, `tracing` setup, CLI
       subcommands stubbed (`serve`, `mcp`, `migrate`, `backup`, `check`)
@@ -121,6 +122,7 @@ using only the tool list, with no other documentation.
 
 *Goal: the part people judge the product by.*
 
+- [ ] Ship the design tokens from [`docs/10-design-system.md`](docs/10-design-system.md) as CSS custom properties + Tailwind theme; self-host and subset the three font families
 - [ ] App shell: case switcher, navigation, command palette, keyboard shortcuts
 - [ ] Case list and case dashboard
 - [ ] Graph canvas: Sigma.js + graphology, WebGL rendering
