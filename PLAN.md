@@ -50,6 +50,7 @@ does nothing. Everything after this is filling it in.*
 - [x] Design documentation set (`docs/00`–`docs/09`, ADRs 0001–0004)
 - [x] `.gitignore`, `.env.example`, git repository initialised
 - [x] [Spec 0001](docs/specs/0001-foundation-and-domain-core.md) written for M0 + M1 (75 user stories, seams chosen)
+- [x] Spec 0001 broken into [15 agent-ready tickets](docs/specs/0001/issues/) with blocking edges
 - [ ] Cargo workspace with the eight crates from `docs/03-architecture.md`
 - [ ] `osintd` binary: config loading from env + `.env`, `tracing` setup, CLI
       subcommands stubbed (`serve`, `mcp`, `migrate`, `backup`, `check`)

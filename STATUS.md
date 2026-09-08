@@ -5,6 +5,29 @@ resume without archaeology.
 
 ---
 
+## 2026-09-08 (later still) — Spec 0001 broken into tickets
+
+**Done**
+
+- Fifteen tracer-bullet tickets under
+  [`docs/specs/0001/issues/`](docs/specs/0001/issues/), numbered in dependency
+  order with explicit blocking edges, each sized for one fresh context window and
+  verifiable on its own. All labelled `ready-for-agent`.
+- Two chains that run in parallel after ticket 01: deployment (02 → 03 → 04 → 05)
+  and domain (06 → 07), meeting at 09 where Entities need both the schema
+  registry and Cases.
+- Deliberate edges recorded in the ticket index: 08 (Cases) is not blocked by the
+  schema registry, since a Case needs no Schemas; 11 (Sources) is blocked by 10
+  rather than 09, since citing a Property value on a Relation needs Relations.
+
+**Next action**
+
+Resolve tickets 002 and 003 in the wayfinder map (build loop, product name), then
+take [ticket 01](docs/specs/0001/issues/01-cargo-workspace-and-crate-skeleton.md)
+— the only one on the frontier at the start.
+
+---
+
 ## 2026-09-08 (later) — Spec 0001 written
 
 **Done**

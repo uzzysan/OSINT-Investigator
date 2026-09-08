@@ -6,7 +6,14 @@ spec labelled `ready-for-agent` needs no further triage before work starts.
 
 | # | Spec | Milestones | Labels | Status |
 | --- | --- | --- | --- | --- |
-| [0001](0001-foundation-and-domain-core.md) | Foundation and domain core | M0, M1 | `ready-for-agent` | ready |
+| [0001](0001-foundation-and-domain-core.md) | Foundation and domain core | M0, M1 | `ready-for-agent` | ready, [15 tickets](0001/issues/) |
+
+## Tickets
+
+A spec is decomposed into tracer-bullet vertical slices under
+`<spec-number>/issues/`, numbered in dependency order with explicit blocking
+edges. Each slice cuts a complete path through every layer it touches and is
+verifiable on its own.
 
 ## Format
 
