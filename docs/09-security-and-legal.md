@@ -18,7 +18,7 @@ the database.
 | SQL injection | `sqlx` compile-time-checked parameterised queries throughout; no string-built SQL |
 | Prompt injection reaching agents through stored data | Tool descriptions state that entity content is data; report/dossier output marks scraped text as untrusted |
 | Accidental data loss | Soft deletes, undo, audit log, nightly backups, integrity check |
-| Backup theft | Backups inherit `0750` and the `osint` user; encryption at rest is the operator's layer (LUKS, or `restic` with a passphrase) |
+| Backup theft | Backups inherit `0750` and the `vesica` user; encryption at rest is the operator's layer (LUKS, or `restic` with a passphrase) |
 
 **What we do not defend against**
 

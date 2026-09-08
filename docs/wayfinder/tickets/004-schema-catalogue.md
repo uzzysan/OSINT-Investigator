@@ -36,7 +36,7 @@ authoring the *wrong* YAML costs more than that.
 - Do we ship a `Custom` escape hatch entity type for v1, so a user is never
   blocked while waiting for a schema?
 
-**Output**: the concrete YAML content of `crates/osint-core/schemas/`.
+**Output**: the concrete YAML content of `crates/vesica-core/schemas/`.
 
 ## Answer
 

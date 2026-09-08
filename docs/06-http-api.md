@@ -175,7 +175,7 @@ without polling.
 
 In `solo` mode (the default) the API is unauthenticated and expected to be bound
 to `127.0.0.1` or a trusted network. In `token` mode every request needs
-`Authorization: Bearer <OSINT_API_TOKEN>`, checked in constant time.
+`Authorization: Bearer <VESICA_API_TOKEN>`, checked in constant time.
 
 The middleware layer that enforces this is written once and applied to every
 route including `/mcp`, so introducing real user accounts later is a change

@@ -53,7 +53,7 @@ does nothing. Everything after this is filling it in.*
 - [x] Spec 0001 broken into [15 agent-ready tickets](docs/specs/0001/issues/) with blocking edges
 - [x] [Design system](docs/10-design-system.md) — brand mark, light/dark tokens, type scale, components, motion, mobile
 - [ ] Cargo workspace with the eight crates from `docs/03-architecture.md`
-- [ ] `osintd` binary: config loading from env + `.env`, `tracing` setup, CLI
+- [ ] `vesica` binary: config loading from env + `.env`, `tracing` setup, CLI
       subcommands stubbed (`serve`, `mcp`, `migrate`, `backup`, `check`)
 - [ ] axum server binding a configurable port, `/api/v1/health` and `/ready`
 - [ ] SQLite connection pool, WAL pragmas, `sqlx` migration runner on startup
@@ -72,14 +72,14 @@ service answering `/api/v1/health`.
 
 *Goal: the data model, correct and tested, with no HTTP in sight.*
 
-- [ ] `osint-core`: `PropertyType` enum with parse + validate per type
-- [ ] `osint-core`: normalisation — names, emails, phones (E.164), domains, URLs,
+- [ ] `vesica-core`: `PropertyType` enum with parse + validate per type
+- [ ] `vesica-core`: normalisation — names, emails, phones (E.164), domains, URLs,
       identifiers with checksums (IBAN, NIP, PESEL, VIN), partial dates
-- [ ] `osint-core`: schema registry loading embedded YAML; inheritance resolution
+- [ ] `vesica-core`: schema registry loading embedded YAML; inheritance resolution
 - [ ] Author the ~30 built-in entity schemas and ~15 relation schemas
-- [ ] `osint-core`: caption derivation, ULID ids, validation errors carrying `fix`
+- [ ] `vesica-core`: caption derivation, ULID ids, validation errors carrying `fix`
 - [ ] Migrations 0001–00xx implementing `docs/04-data-model.md`
-- [ ] `osint-store`: repositories for case, entity, relation, source, blob, audit
+- [ ] `vesica-store`: repositories for case, entity, relation, source, blob, audit
 - [ ] Single-writer task + reader pool; every multi-step write in a transaction
 - [ ] FTS5 table and sync triggers
 - [ ] Graph queries: neighbourhood CTE, shortest path, connected components,
@@ -106,9 +106,9 @@ neighbours at depth 3, and asserts the audit log is complete.
 - [ ] Auth middleware: `solo` and `token` modes, one layer, every route
 - [ ] SSE `/events` with change publication from the write path
 - [ ] `utoipa` OpenAPI generation, Scalar UI at `/api/docs`
-- [ ] `osint-mcp` on `rmcp`: discovery, read and write tools
+- [ ] `vesica-mcp` on `rmcp`: discovery, read and write tools
 - [ ] `graph_write` batch tool with `ref` resolution, transactional
-- [ ] stdio transport (`osintd mcp`) and streamable HTTP at `/mcp`
+- [ ] stdio transport (`vesica mcp`) and streamable HTTP at `/mcp`
 - [ ] MCP resources (`case://`, `entity://`) and the five prompts
 - [ ] Integration tests driving the MCP server as a client
 
@@ -179,7 +179,7 @@ order with correct precision, and scrubbing the range changes the canvas.
 - [ ] Same-as link (cross case) with `entity_link`
 - [ ] "Different" tombstones; "defer" with expiry
 - [ ] Cross-case traversal: foreign nodes on the canvas, `follow_links` in queries
-- [ ] `osintd rescan-matches`
+- [ ] `vesica rescan-matches`
 - [ ] MCP: `match_queue`, `match_find`, `match_resolve` (merge gated by config)
 - [ ] Labelled fixture set (~300 pairs); precision/recall/F1 report per threshold
 - [ ] Calibrate default thresholds against the fixture set
@@ -201,7 +201,7 @@ is never proposed again.
 - [ ] Markdown report generator: summary, dossiers, relation tables, timeline,
       Mermaid subgraph, source bibliography
 - [ ] `case_report` and `case_export` MCP tools; `subgraph_render`
-- [ ] `osintd import` / `osintd export` headless commands
+- [ ] `vesica import` / `vesica export` headless commands
 
 **Exit**: a 500-row CSV becomes a correctly typed case in under a minute, and
 that case exports to a Markdown report a person would actually send.
@@ -216,8 +216,8 @@ that case exports to a Markdown report a person would actually send.
       `--dry-run`
 - [ ] systemd unit with the hardening options from `docs/08-deployment.md`
 - [ ] `update.sh` with pre-update backup and automatic rollback on failed health
-- [ ] `backup.sh` / `osintd backup` using SQLite's online backup API; retention
-- [ ] `osintd check`: blob hashes, orphans, foreign keys
+- [ ] `backup.sh` / `vesica backup` using SQLite's online backup API; retention
+- [ ] `vesica check`: blob hashes, orphans, foreign keys
 - [ ] Restore procedure, documented and rehearsed
 - [ ] macOS launchd path; Alpine/musl target; arm64 build
 - [ ] Dockerfile and compose.yml (secondary path)
@@ -258,8 +258,8 @@ no manual steps; a backup taken under load restores to an identical database.
    what the next action is. Written before stopping, always.
 6. **A milestone is not done until its exit condition is demonstrated**, not
    until its boxes look ticked.
-7. **Tests accompany the code**, not a later cleanup pass. `osint-core` and
-   `osint-resolve` in particular are pure and have no excuse.
+7. **Tests accompany the code**, not a later cleanup pass. `vesica-core` and
+   `vesica-resolve` in particular are pure and have no excuse.
 8. **Check `docs/wayfinder/map.md`** before starting: open decisions are listed
    there, and building past one is how rework happens.
 

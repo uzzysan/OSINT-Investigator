@@ -1,4 +1,4 @@
-# Wayfinder Map — OSINT Investigator
+# Wayfinder Map — Vesica
 
 The route from a loose idea to a shipped v1. Tickets here hold **decisions**;
 [`PLAN.md`](../../PLAN.md) holds **execution**. A decision that is still open is
@@ -12,7 +12,7 @@ Tracker: local markdown. Tickets are files in
 
 ## Destination
 
-A running v1 of OSINT Investigator on a dedicated machine: a single-binary,
+A running v1 of Vesica on a dedicated machine: a single-binary,
 self-hosted, case-based investigative knowledge graph with cross-case entity
 resolution, a timeline, a graph canvas and an MCP server, installed by cloning
 the repository and running one script. Every design and progress document lives
@@ -33,9 +33,9 @@ in `.md` files in this repository, kept current as the work proceeds.
   Rust-native where a credible option exists. Backups before edits. Git commit
   per meaningful change. Secrets in `.env`, never in the repository. Keep the
   status log current so work can resume mid-stream.
-- **Constraint discovered 2026-09-08**: the connected folder is reachable through
-  a Linux VM that has Node and Python but no Rust toolchain and no Docker. Where
-  the build and test loop runs is [ticket 002](tickets/002-build-and-test-loop.md).
+- **Build loop**: agents build and test in the cloud container; the device folder
+  is the source of truth and is synced and committed once per ticket. Settled in
+  [ticket 002](tickets/002-build-and-test-loop.md).
 
 ## Decisions so far
 
@@ -57,6 +57,14 @@ in `.md` files in this repository, kept current as the work proceeds.
   [`docs/03-architecture.md`](../03-architecture.md#35-frontend).
 - MCP implementation: `rmcp`, the official Rust SDK, serving stdio and
   streamable HTTP from the same process as the web server.
+- [Build and test loop](tickets/002-build-and-test-loop.md): agents build and
+  test in the cloud container (cargo already present, more memory, no shell time
+  limit); the device folder stays the single source of truth, synced and
+  committed once per ticket.
+- [Product name](tickets/003-product-name.md): **Vesica** — the lens two
+  overlapping circles make, which is what the logomark is and what the product
+  does. Applied to crates, binary, service, paths, environment prefix and the
+  MCP server id.
 
 Specs derived from these decisions live in [`docs/specs/`](../specs/). A spec
 names the tickets it depends on rather than assuming them closed.
@@ -66,8 +74,6 @@ names the tickets it depends on rather than assuming them closed.
 | # | Ticket | Type | State |
 | --- | --- | --- | --- |
 | 001 | [Licence and distribution model](tickets/001-licence.md) | grilling | frontier |
-| 002 | [Build and test loop location](tickets/002-build-and-test-loop.md) | grilling | frontier |
-| 003 | [Product and binary name](tickets/003-product-name.md) | grilling | frontier |
 | 004 | [Built-in schema catalogue](tickets/004-schema-catalogue.md) | grilling | frontier |
 | 005 | [Canvas performance at target scale](tickets/005-canvas-performance.md) | prototype | frontier |
 | 006 | [Timeline rendering approach](tickets/006-timeline-rendering.md) | prototype | blocked by 005 |
@@ -84,7 +90,7 @@ In scope, not yet sharp enough to ticket. Graduates as the frontier advances.
 - **Report templating.** `case_report` needs a shape. Whether that is a fixed
   set of sections, a template language, or agent-composed Markdown depends on
   what M6 users actually ask for.
-- **Agent autonomy on merges.** `OSINT_MCP_ALLOW_MERGE` exists as a flag, but the
+- **Agent autonomy on merges.** `VESICA_MCP_ALLOW_MERGE` exists as a flag, but the
   right default, and whether an agent-proposed merge should queue for human
   approval rather than being refused, needs M5 experience.
 - **Behaviour above the canvas ceiling.** Sampling, server-side layout,

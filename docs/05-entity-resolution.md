@@ -24,7 +24,7 @@ you — with a reason you can check.
 entity written
      │
      ▼
-[1] normalise properties          (osint-core, same code as the write path)
+[1] normalise properties          (vesica-core, same code as the write path)
      │
      ▼
 [2] compute blocking keys         → block_key table
@@ -104,8 +104,8 @@ calibrated against real cases during Milestone 5.
 
 **Thresholds** (configurable):
 
-- `OSINT_ER_SUGGEST_THRESHOLD` (default `0.62`) — surfaces in the review queue.
-- `OSINT_ER_STRONG_THRESHOLD` (default `0.85`) — marked "strong", sorted first,
+- `VESICA_ER_SUGGEST_THRESHOLD` (default `0.62`) — surfaces in the review queue.
+- `VESICA_ER_STRONG_THRESHOLD` (default `0.85`) — marked "strong", sorted first,
   badge on the entity.
 
 ## 5.5 Explanation
@@ -152,7 +152,7 @@ neither the UI nor an agent crosses cases by accident.
 | Deterministic ids | `ulid` |
 
 The scorer is a pure function `score(&EntityView, &EntityView, &Weights) ->
-(f32, Features)` in `osint-resolve`, unit-tested against a fixture set of pairs
+(f32, Features)` in `vesica-resolve`, unit-tested against a fixture set of pairs
 with expected verdicts. That fixture set is the regression suite for weight
 changes.
 

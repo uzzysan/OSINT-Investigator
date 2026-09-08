@@ -8,7 +8,7 @@ same port, and talks to one SQLite file and one blob directory on local disk.
 ```
                     ┌──────────────────────────────────────────────┐
  Browser  ─────────▶│                                              │
-                    │              osintd  (one binary)            │
+                    │              vesica  (one binary)            │
  AI agent ─────────▶│                                              │
  (HTTP /mcp)        │  ┌────────────────────────────────────────┐  │
                     │  │ axum router                            │  │
@@ -20,19 +20,19 @@ same port, and talks to one SQLite file and one blob directory on local disk.
                     │  └───────────────┬────────────────────────┘  │
                     │                  │                           │
                     │  ┌───────────────▼────────────────────────┐  │
-                    │  │ osint-core   domain, schema registry,  │  │
+                    │  │ vesica-core   domain, schema registry,  │  │
                     │  │              validation, normalisation │  │
                     │  └───────────────┬────────────────────────┘  │
                     │                  │                           │
                     │  ┌───────────────▼──────┐  ┌──────────────┐  │
-                    │  │ osint-store          │  │ osint-resolve│  │
+                    │  │ vesica-store          │  │ vesica-resolve│  │
                     │  │ sqlx + SQLite (WAL)  │◀─┤ matcher      │  │
                     │  │ FTS5, migrations     │  │ (bg worker)  │  │
                     │  └───────────────┬──────┘  └──────────────┘  │
                     └──────────────────┼───────────────────────────┘
                                        │
                           ┌────────────▼─────────────┐
-                          │ data/osint.sqlite        │
+                          │ data/vesica.sqlite        │
                           │ data/blobs/<sha256>      │
                           └──────────────────────────┘
 ```
@@ -60,16 +60,16 @@ Recorded properly in the ADRs; the short version:
 
 ```
 crates/
-  osint-core/       # no I/O. Domain types, schema registry, property types,
+  vesica-core/       # no I/O. Domain types, schema registry, property types,
                     # normalisation, validation, caption derivation, IDs.
-  osint-store/      # sqlx/SQLite. Migrations, repositories, FTS, graph queries.
-  osint-resolve/    # blocking keys, similarity, scoring, candidate queue.
-  osint-api/        # axum handlers, DTOs, OpenAPI, SSE, upload handling.
-  osint-mcp/        # rmcp server: tools, resources, prompts. Calls osint-core
-                    # + osint-store through the same service layer as the API.
-  osint-report/     # Markdown / JSON / FtM rendering.
-  osint-import/     # CSV/XLSX/FtM ingestion with mapping and dry-run.
-  osintd/           # the binary: config, wiring, CLI subcommands, systemd glue.
+  vesica-store/      # sqlx/SQLite. Migrations, repositories, FTS, graph queries.
+  vesica-resolve/    # blocking keys, similarity, scoring, candidate queue.
+  vesica-api/        # axum handlers, DTOs, OpenAPI, SSE, upload handling.
+  vesica-mcp/        # rmcp server: tools, resources, prompts. Calls vesica-core
+                    # + vesica-store through the same service layer as the API.
+  vesica-report/     # Markdown / JSON / FtM rendering.
+  vesica-import/     # CSV/XLSX/FtM ingestion with mapping and dry-run.
+  vesica/           # the binary: config, wiring, CLI subcommands, systemd glue.
 web/                # Vite + React + TypeScript SPA
 migrations/         # numbered SQL files, applied at startup
 deploy/             # install.sh, systemd unit, backup.sh, update.sh
@@ -78,19 +78,19 @@ deploy/             # install.sh, systemd unit, backup.sh, update.sh
 The dependency direction is strict and one-way:
 
 ```
-osintd → osint-api, osint-mcp
-osint-api, osint-mcp → osint-report, osint-import, osint-resolve, osint-store
-osint-resolve, osint-store, osint-import, osint-report → osint-core
-osint-core → nothing internal
+vesica → vesica-api, vesica-mcp
+vesica-api, vesica-mcp → vesica-report, vesica-import, vesica-resolve, vesica-store
+vesica-resolve, vesica-store, vesica-import, vesica-report → vesica-core
+vesica-core → nothing internal
 ```
 
-`osint-core` must stay I/O-free so the domain rules are testable without a
+`vesica-core` must stay I/O-free so the domain rules are testable without a
 database. Everything the API can do, MCP can do, because both call the same
 service functions rather than each other.
 
 ## 3.4 Crate-by-crate
 
-### osint-core
+### vesica-core
 Pure domain. Owns:
 - `Schema`, `PropertyDef`, `PropertyType`, `SchemaRegistry` (built-ins loaded
   from an embedded YAML file, custom ones layered on from the database).
@@ -103,7 +103,7 @@ Pure domain. Owns:
 - Validation errors that carry a fix suggestion, which the MCP layer surfaces
   verbatim to agents.
 
-### osint-store
+### vesica-store
 - `sqlx` with the SQLite driver, compile-time-checked queries, migrations run at
   startup inside a transaction.
 - Repositories: `CaseRepo`, `EntityRepo`, `RelationRepo`, `SourceRepo`,
@@ -115,37 +115,37 @@ Pure domain. Owns:
 - One writer connection, a read pool. `busy_timeout`, `WAL`, `synchronous=NORMAL`,
   `foreign_keys=ON`.
 
-### osint-resolve
+### vesica-resolve
 Background worker fed by a durable queue table. For each dirty entity it
 computes blocking keys, shortlists candidates, scores them and writes
 `match_candidate` rows. Never mutates entities. Detail in
 [`05-entity-resolution.md`](05-entity-resolution.md).
 
-### osint-api
+### vesica-api
 Thin. Handlers parse, call a service, serialise. DTOs are separate from domain
 types so the wire format can be stable while the domain evolves. Uploads stream
 to a temp file, hash, then move into the content-addressed store. SSE stream
 publishes change events so open browser tabs update when an agent writes.
 
-### osint-mcp
+### vesica-mcp
 Built on [`rmcp`](https://docs.rs/rmcp), the official Rust MCP SDK. Tools are
 declared with `#[tool]` and a `tool_router`, giving JSON Schema for free. The
-same `Arc<Services>` is shared with the HTTP layer. `osintd mcp` runs it over
+same `Arc<Services>` is shared with the HTTP layer. `vesica mcp` runs it over
 stdio; the HTTP server mounts the streamable-HTTP service at `/mcp`.
 
-### osintd
+### vesica
 Config from environment plus `.env`, CLI subcommands:
 
 | Command | Purpose |
 | --- | --- |
-| `osintd serve` | Run the web + API + MCP HTTP server (default) |
-| `osintd mcp` | Run the MCP server over stdio |
-| `osintd migrate` | Apply migrations and exit |
-| `osintd rescan-matches` | Re-run entity resolution over everything |
-| `osintd backup [--out DIR]` | Consistent backup of DB + blob manifest |
-| `osintd check` | Integrity check: blob hashes, orphans, FK validation |
-| `osintd import <file>` | Headless import |
-| `osintd export <case>` | Headless export |
+| `vesica serve` | Run the web + API + MCP HTTP server (default) |
+| `vesica mcp` | Run the MCP server over stdio |
+| `vesica migrate` | Apply migrations and exit |
+| `vesica rescan-matches` | Re-run entity resolution over everything |
+| `vesica backup [--out DIR]` | Consistent backup of DB + blob manifest |
+| `vesica check` | Integrity check: blob hashes, orphans, FK validation |
+| `vesica import <file>` | Headless import |
+| `vesica export <case>` | Headless export |
 
 ## 3.5 Frontend
 
@@ -168,8 +168,8 @@ mode proxies to the Rust server so the SPA can hot-reload.
 **Human adds an entity**
 
 1. `POST /api/v1/cases/{case}/entities` with schema + properties.
-2. `osint-core` validates, normalises, derives the caption.
-3. `osint-store` writes `entity` + `entity_prop` + `audit_log` + an FTS row and
+2. `vesica-core` validates, normalises, derives the caption.
+3. `vesica-store` writes `entity` + `entity_prop` + `audit_log` + an FTS row and
    enqueues a `match_job` — all in one transaction.
 4. Response returns immediately.
 5. The resolver worker picks up the job, scores candidates, writes
@@ -192,7 +192,7 @@ and makes lock contention impossible rather than merely unlikely. The resolver
 worker batches its writes and yields to interactive traffic.
 
 If write throughput ever becomes the limit — it will not, at this scale — the
-`osint-store` repository trait is the seam behind which Postgres could be added.
+`vesica-store` repository trait is the seam behind which Postgres could be added.
 That seam is deliberate but unused; see [ADR-0001](adr/0001-single-binary-sqlite.md).
 
 ## 3.8 Observability

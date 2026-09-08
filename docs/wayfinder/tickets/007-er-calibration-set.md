@@ -41,7 +41,7 @@ Blocked by [004](004-schema-catalogue.md): the fixture format depends on the
 final property names.
 
 **Output**: a decision on the source mix, a licence note for anything external,
-and a `crates/osint-resolve/fixtures/` format specification.
+and a `crates/vesica-resolve/fixtures/` format specification.
 
 ## Answer
 

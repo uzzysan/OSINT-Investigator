@@ -2,16 +2,16 @@
 id: 002
 title: Build and test loop location
 type: grilling
-status: open
+status: resolved
 blocked_by: []
-assignee:
+assignee: claude
 ---
 
 ## Question
 
 Where does `cargo build` actually run during development?
 
-**What we know.** The project lives at `C:\Kodzenie\1_Projekty\OSINT Investigator`
+**What we know.** The project lives at `C:\Kodzenie\1_Projekty\Vesica`
 on the Windows machine `rafal-y540`. The agent reaches that folder through a
 Linux VM that has Node 22, Python 3.10, git and network access — but **no Rust
 toolchain and no Docker**. The cloud container the agent also has can install
@@ -46,4 +46,18 @@ onward, so it is worth settling first.
 
 ## Answer
 
-_(unresolved)_
+**C, with A as the fallback and the verification bench.**
+
+Agents build and test in the **cloud container**: cargo 1.95 is already installed
+there, it has 7 GB of RAM against the device VM's 3.9 GB, a real shell with no
+45-second ceiling, and 30 GB free. The device folder stays the **single source of
+truth**: at the end of each ticket the changed files are written into it and
+committed there, so there is one sync boundary per ticket rather than per edit,
+and never a second copy drifting between them.
+
+The Rust toolchain was also installed in the device VM. It is not the inner loop,
+but it gives a second Linux box for exercising `deploy/install.sh` in something
+closer to a clean target, which ticket 05 needs.
+
+Long builds anywhere run detached with output to a log that gets polled, since a
+cold workspace build exceeds any single shell call.

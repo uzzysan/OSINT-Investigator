@@ -1,4 +1,6 @@
-# OSINT Investigator
+# Vesica
+
+*A vesica is the lens two overlapping circles make — two cases, one shared entity.*
 
 A self-hosted link-analysis workbench for open-source investigations: map people,
 companies, assets, accounts and online resources as a graph, keep each
@@ -39,8 +41,8 @@ agents can read the graph, write to it, and generate reports without a browser.
 ## How you deploy it
 
 ```bash
-git clone <repo-url> osint-investigator
-cd osint-investigator
+git clone <repo-url> vesica
+cd vesica
 ./deploy/install.sh
 ```
 

@@ -11,7 +11,7 @@ Built on [`rmcp`](https://docs.rs/rmcp), the official Rust MCP SDK.
 
 | Transport | How | For |
 | --- | --- | --- |
-| **stdio** | `osintd mcp` | Local agents (Claude Code, Claude Desktop, Cowork) launched as a subprocess |
+| **stdio** | `vesica mcp` | Local agents (Claude Code, Claude Desktop, Cowork) launched as a subprocess |
 | **streamable HTTP** | `POST/GET http://host:port/mcp` | Remote agents, and anything already talking to the web server |
 
 Both are served by the same handler set. The HTTP transport honours the same
@@ -22,10 +22,10 @@ Client configuration example (stdio):
 ```json
 {
   "mcpServers": {
-    "osint-investigator": {
-      "command": "/opt/osint-investigator/bin/osintd",
+    "vesica": {
+      "command": "/opt/vesica/bin/vesica",
       "args": ["mcp"],
-      "env": { "OSINT_DB_PATH": "/var/lib/osint-investigator/osint.sqlite" }
+      "env": { "VESICA_DB_PATH": "/var/lib/vesica/vesica.sqlite" }
     }
   }
 }
@@ -49,7 +49,7 @@ Client configuration example (stdio):
    can gate them.
 6. **The agent proposes, the human disposes.** By default an agent may *read*
    the match queue and *propose* resolutions, but `match_resolve` with
-   `action: "merge"` requires `OSINT_MCP_ALLOW_MERGE=true`.
+   `action: "merge"` requires `VESICA_MCP_ALLOW_MERGE=true`.
 
 ## 7.3 Tools
 
@@ -136,7 +136,7 @@ Response returns `{"refs": {"p1": "01J...", "c1": "01J..."}, "matches_pending": 
 | `case://{id}/summary` | Markdown case briefing: what it is, key entities, open threads |
 | `case://{id}/schema-usage` | Which schemas are in use and how heavily |
 | `entity://{id}` | Markdown dossier for one entity |
-| `osint://schemas` | The whole ontology as one readable document |
+| `vesica://schemas` | The whole ontology as one readable document |
 
 ## 7.5 Prompts
 

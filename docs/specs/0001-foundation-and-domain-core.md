@@ -78,7 +78,7 @@ that prove it.
 1. As a maintainer, I want a Cargo workspace with the eight crates already
    separated, so that the dependency direction is enforced by the compiler
    from the first commit rather than agreed and then eroded.
-2. As a maintainer, I want `osint-core` to declare no internal dependencies and
+2. As a maintainer, I want `vesica-core` to declare no internal dependencies and
    perform no I/O, so that domain rules can be tested without a database and
    stay testable as the project grows.
 3. As a maintainer, I want a single `just` recipe for each of dev, build, test,
@@ -274,22 +274,22 @@ that prove it.
 
 Eight crates as set out in
 [`docs/03-architecture.md`](../03-architecture.md#33-cargo-workspace). This spec
-brings `osint-core`, `osint-store` and `osintd` to a working state, creates
-`osint-api` with only health and readiness, and creates the remaining crates as
+brings `vesica-core`, `vesica-store` and `vesica` to a working state, creates
+`vesica-api` with only health and readiness, and creates the remaining crates as
 compiling stubs so the dependency graph is established and enforced from the
 start.
 
 The one-way dependency rule is enforced mechanically, not by convention: CI fails
-if `osint-core` gains an internal dependency or an I/O crate. `osint-core`
+if `vesica-core` gains an internal dependency or an I/O crate. `vesica-core`
 carries `#![forbid(unsafe_code)]`, as do all crates unless a documented exception
 exists.
 
 ### The service layer
 
-A `Services` struct in `osint-api` — despite the crate name, it is the
+A `Services` struct in `vesica-api` — despite the crate name, it is the
 application service layer, not the HTTP layer — owns a store handle, the schema
 registry and configuration, and exposes one method per use case taking and
-returning `osint-core` types. It performs authorisation-free business
+returning `vesica-core` types. It performs authorisation-free business
 orchestration: validate, normalise, persist, audit, publish.
 
 This is deliberate and load-bearing. Both the axum handlers and the rmcp tools in
@@ -302,7 +302,7 @@ constructs it against a temporary database in a few lines.
 
 ### Ontology as data
 
-Built-in Schemas are YAML files under `crates/osint-core/schemas/`, embedded into
+Built-in Schemas are YAML files under `crates/vesica-core/schemas/`, embedded into
 the binary at compile time. The registry parses them at startup, resolves
 `extends` inheritance, validates internal consistency (no unknown Property types,
 no duplicate Property names after inheritance, caption templates referencing
@@ -327,7 +327,7 @@ cheap precisely because the catalogue is data.
 
 ### Property types and normalisation
 
-`PropertyType` is an enum in `osint-core`. Each variant owns three pure
+`PropertyType` is an enum in `vesica-core`. Each variant owns three pure
 functions: parse-and-validate, normalise, and blocking-key derivation. Blocking
 keys are unused in this spec but defined here so the resolver in M5 has nothing
 to invent.
@@ -414,7 +414,7 @@ anything to deploy.
 
 ### Naming
 
-The workspace uses `osintd` and `osint-*` as specified.
+The workspace uses `vesica` and `osint-*` as specified.
 [Ticket 003](../wayfinder/tickets/003-product-name.md) is open, and these names
 reach crate names, the systemd unit, the install path and the default data
 directory. The implementing agent should keep the name in exactly the places
@@ -461,7 +461,7 @@ This is the seam that pays for itself twice: Spec 0002's HTTP handlers and MCP
 tools are adapters over the same struct, so this suite already proves their
 behaviour, and the transport tests reduce to wiring checks.
 
-### Seam 2 — `osint-core` pure functions (secondary)
+### Seam 2 — `vesica-core` pure functions (secondary)
 
 Normalisation, validation, Schema registry resolution and caption derivation are
 pure functions with no I/O, and their edge cases are numerous, cheap to enumerate
@@ -500,7 +500,7 @@ writable.
 There is none in this repository; the codebase is documentation only. These
 conventions are therefore established here and will be cited by later specs:
 `tests/` per crate for integration tests, `#[cfg(test)]` modules for pure-function
-tests, a shared `osint-testkit` dev-dependency for fixtures once a second crate
+tests, a shared `vesica-testkit` dev-dependency for fixtures once a second crate
 needs them, and `insta` for golden assertions.
 
 ### CI
@@ -530,7 +530,7 @@ so that test has something to run.
   yet; the middleware seam appears with the HTTP surface in Spec 0002.
 - **Merge and undo.** `merged_into` exists in the schema and is honoured on read;
   the merge operation itself is M5.
-- **Backup, update and integrity-check scripts.** `osintd check` is stubbed; the
+- **Backup, update and integrity-check scripts.** `vesica check` is stubbed; the
   real implementation is M7.
 - **Performance tuning.** Correctness first. The 100k-Entity targets are M7's
   problem, though nothing here should make them unreachable.

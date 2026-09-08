@@ -17,7 +17,7 @@
   `STATUS.md` before stopping.
 - **Secrets live in `.env`**, which is git-ignored. Keep `.env.example` current
   with every new key, using placeholders. `gitleaks` runs in CI.
-- **Tests accompany the code.** `osint-core` and `osint-resolve` are pure
+- **Tests accompany the code.** `vesica-core` and `vesica-resolve` are pure
   functions with no I/O and therefore no excuse.
 - **A milestone is done when its exit condition is demonstrated**, not when its
   checkboxes look full.
@@ -36,7 +36,7 @@ just audit        # cargo deny, cargo audit, npm audit, gitleaks
 ## Code layout
 
 See [`docs/03-architecture.md`](03-architecture.md#33-cargo-workspace). The
-dependency direction is one-way and enforced: `osint-core` depends on nothing
+dependency direction is one-way and enforced: `vesica-core` depends on nothing
 internal and performs no I/O. If a domain rule needs a database to test, it is
 in the wrong crate.
 

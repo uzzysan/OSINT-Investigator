@@ -26,4 +26,4 @@ tears it down after. Later tickets should not each invent their own.
 - [ ] A single writer task serialises all writes; a reader pool serves reads
 - [ ] A test harness creates an isolated store in a temporary directory and cleans up after itself
 - [ ] Repository traits are defined with a SQLite implementation behind them
-- [ ] `osintd migrate` applies migrations and exits with an accurate status code
+- [ ] `vesica migrate` applies migrations and exits with an accurate status code

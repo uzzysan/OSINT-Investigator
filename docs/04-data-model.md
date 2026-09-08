@@ -65,7 +65,7 @@ properties:
   - { name: notes,       type: text,       label: Notes }
 ```
 
-Built-in schemas ship in `crates/osint-core/schemas/*.yaml`, embedded in the
+Built-in schemas ship in `crates/vesica-core/schemas/*.yaml`, embedded in the
 binary. Custom schemas live in a `schema_def` table and are layered on at
 startup; a custom schema may extend a built-in one and may add properties to it.
 
@@ -358,10 +358,10 @@ CREATE TABLE saved_view (
 ## 4.3 Normalisation {#normalisation}
 
 The raw value is sacred; the normalised value is derived and disposable. Both
-are stored. When a normalisation rule changes, `osintd rescan-matches`
+are stored. When a normalisation rule changes, `vesica rescan-matches`
 recomputes `value_norm` and `block_key` from the raw values — no data is lost.
 
-Normalisation happens in exactly one place, `osint-core::normalize`, and both
+Normalisation happens in exactly one place, `vesica-core::normalize`, and both
 the write path and the matcher call it. This is why a phone number entered as
 `0601 234 567` in a case whose `default_region` is `PL` matches
 `+48601234567` entered in another case.

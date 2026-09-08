@@ -17,7 +17,7 @@ peak, mostly reads.
 
 ## Decision
 
-One Rust binary (`osintd`) containing the HTTP API, the web UI assets, the MCP
+One Rust binary (`vesica`) containing the HTTP API, the web UI assets, the MCP
 server and a background worker, backed by one SQLite database file in WAL mode
 and one content-addressed blob directory.
 
@@ -25,7 +25,7 @@ and one content-addressed blob directory.
 - Full-text via FTS5; fuzzy matching via a trigram pass over the FTS shortlist.
 - Web assets embedded with `rust-embed`.
 - One writer task, a reader pool.
-- Persistence behind repository traits in `osint-store`, so a second backend is
+- Persistence behind repository traits in `vesica-store`, so a second backend is
   possible without touching the rest of the codebase.
 
 ## Alternatives considered

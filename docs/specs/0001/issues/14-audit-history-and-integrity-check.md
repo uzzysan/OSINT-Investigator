@@ -28,5 +28,5 @@ An operator also gets a way to check the database is sound without reading SQL.
 - [ ] Related mutations share a batch identifier; a caller can open a batch and write under it
 - [ ] The codebase contains no path that updates or deletes an audit entry
 - [ ] Audit writes are in the same transaction as the change, proven by a test where a rolled-back write leaves no entry
-- [ ] `osintd check` verifies foreign key integrity, finds orphaned rows, and confirms every Entity's Schema exists in the registry
+- [ ] `vesica check` verifies foreign key integrity, finds orphaned rows, and confirms every Entity's Schema exists in the registry
 - [ ] The check reports findings in plain language and exits with an accurate status code

@@ -61,7 +61,7 @@ take [ticket 01](docs/specs/0001/issues/01-cargo-workspace-and-crate-skeleton.md
 - Test seams chosen and recorded: **the service layer** as the primary seam
   (tested against a real temp SQLite file, and the same struct both axum and rmcp
   will adapt in Spec 0002, so one suite covers both transports), plus
-  **`osint-core` pure functions** for normalisation, validation and schema
+  **`vesica-core` pure functions** for normalisation, validation and schema
   resolution. Repositories are deliberately *not* a seam.
 - `docs/specs/` index created; PLAN.md, README.md and the wayfinder map now point
   at it.
@@ -85,7 +85,7 @@ Resolve tickets 002 and 003, then begin M0 against Spec 0001.
 
 **Done**
 
-- Repository initialised at `C:\Kodzenie\1_Projekty\OSINT Investigator`, git
+- Repository initialised at `C:\Kodzenie\1_Projekty\Vesica`, git
   repository created, `.gitignore` and `.env.example` written.
 - Researched the space: OCCRP Aleph + FollowTheMoney as the ontology reference,
   Maltego as the interaction reference, OpenSanctions `nomenklatura` as the
