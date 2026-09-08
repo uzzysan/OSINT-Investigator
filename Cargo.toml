@@ -40,3 +40,24 @@ ulid = { version = "1", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 figment = { version = "0.10", features = ["env"] }
 rust-embed = "8"
+
+# --- Pure value-layer dependencies (ticket 0001-06). ---------------------
+# Every crate below is computation-only: no filesystem, no network, no
+# database, no async runtime. They are declared here so the version is fixed
+# once for the whole workspace, per the spec's "crate choices are fixed here
+# so they are not relitigated per pull request".
+unicode-normalization = "0.1"  # NFKD folding for names and addresses
+deunicode = "1"                # transliteration to ASCII for match keys
+phonenumber = "0.3"            # E.164 parsing/formatting with a default region
+rphonetic = "4"                # Double Metaphone, for the name_phonetic block key
+url = "2"                      # WHATWG URL parsing + IDNA/punycode host handling
+psl = "2"                      # Public Suffix List: registrable-domain extraction
+rust_iso3166 = "0.2"           # ISO-3166-1 country code/name tables
+# strsim is fixed here by the spec for the M5 resolver's fuzzy comparison. It
+# is deliberately NOT a dependency of any member crate yet: nothing in the
+# value layer computes a similarity score. The version pin lives here so the
+# resolver ticket inherits it rather than choosing again.
+strsim = "0.11"
+
+# Test-only.
+proptest = "1"

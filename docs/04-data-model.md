@@ -31,7 +31,8 @@ compares two entities.
 | `number` | `42.5` | numeric | weak |
 | `entity` | reference to another entity | — | n/a |
 | `checksum` | `sha256:…` | lowercase hex | **very strong** |
-| `iban` / `wallet` | crypto address, bank account | uppercase, checksum-validate | **very strong** |
+| `iban` | bank account | strip separators, uppercase, mod-97 validate | **very strong** |
+| `wallet` | crypto address | **case is meaningful — never blanket-uppercase.** bech32 lower-cased and polymod-checked; EVM `0x` + 40 hex lower-cased (mixed case there is the EIP-55 checksum); base58 left exactly as given | **very strong** |
 
 "Very strong" identifiers alone can carry a pair over the suggest threshold.
 Names alone never can.
