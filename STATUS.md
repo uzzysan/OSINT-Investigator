@@ -5,6 +5,37 @@ resume without archaeology.
 
 ---
 
+## 2026-09-08 (later) — Spec 0001 written
+
+**Done**
+
+- [Spec 0001 — Foundation and domain core](docs/specs/0001-foundation-and-domain-core.md)
+  covering M0 + M1: problem statement, solution, 75 user stories, implementation
+  decisions, testing decisions, out-of-scope and notes. Labelled
+  `ready-for-agent`.
+- Test seams chosen and recorded: **the service layer** as the primary seam
+  (tested against a real temp SQLite file, and the same struct both axum and rmcp
+  will adapt in Spec 0002, so one suite covers both transports), plus
+  **`osint-core` pure functions** for normalisation, validation and schema
+  resolution. Repositories are deliberately *not* a seam.
+- `docs/specs/` index created; PLAN.md, README.md and the wayfinder map now point
+  at it.
+
+**Notes**
+
+- No issue tracker is configured for this repository, so specs live as markdown
+  in `docs/specs/` with labels in front matter. Running
+  `/setup-matt-pocock-skills` would wire up a real tracker if that is wanted.
+- Spec 0001 depends on three still-open tickets and says so rather than assuming
+  them closed: 002 (build loop), 003 (name), 004 (schema catalogue). The spec
+  specifies a provisional starter schema set so 004 does not block a start.
+
+**Next action**
+
+Resolve tickets 002 and 003, then begin M0 against Spec 0001.
+
+---
+
 ## 2026-09-08 — Design phase complete
 
 **Done**

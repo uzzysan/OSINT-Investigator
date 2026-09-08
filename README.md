@@ -67,6 +67,7 @@ See [`docs/08-deployment.md`](docs/08-deployment.md).
 | [`docs/08-deployment.md`](docs/08-deployment.md) | install.sh, systemd, ports, backup |
 | [`docs/09-security-and-legal.md`](docs/09-security-and-legal.md) | Threat model, data hygiene, GDPR notes |
 | [`docs/adr/`](docs/adr/) | Architecture decision records |
+| [`docs/specs/`](docs/specs/) | Agent-ready implementation specs |
 | [`PLAN.md`](PLAN.md) | Living development plan — done vs. remaining |
 | [`docs/wayfinder/map.md`](docs/wayfinder/map.md) | Open decisions still being charted |
 | [`STATUS.md`](STATUS.md) | Session log — where work stopped, what is next |

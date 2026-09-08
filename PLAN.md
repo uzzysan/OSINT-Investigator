@@ -20,6 +20,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 Requirement ids (`F-ENT-1`) refer to
 [`docs/02-functional-spec.md`](docs/02-functional-spec.md).
 
+Milestones are turned into agent-ready specs in [`docs/specs/`](docs/specs/) as
+work approaches them. M0 and M1 are covered by
+[spec 0001](docs/specs/0001-foundation-and-domain-core.md).
+
 ---
 
 ## Progress at a glance
@@ -45,6 +49,7 @@ does nothing. Everything after this is filling it in.*
 
 - [x] Design documentation set (`docs/00`–`docs/09`, ADRs 0001–0004)
 - [x] `.gitignore`, `.env.example`, git repository initialised
+- [x] [Spec 0001](docs/specs/0001-foundation-and-domain-core.md) written for M0 + M1 (75 user stories, seams chosen)
 - [ ] Cargo workspace with the eight crates from `docs/03-architecture.md`
 - [ ] `osintd` binary: config loading from env + `.env`, `tracing` setup, CLI
       subcommands stubbed (`serve`, `mcp`, `migrate`, `backup`, `check`)

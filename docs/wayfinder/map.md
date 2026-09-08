@@ -58,6 +58,9 @@ in `.md` files in this repository, kept current as the work proceeds.
 - MCP implementation: `rmcp`, the official Rust SDK, serving stdio and
   streamable HTTP from the same process as the web server.
 
+Specs derived from these decisions live in [`docs/specs/`](../specs/). A spec
+names the tickets it depends on rather than assuming them closed.
+
 ## Open tickets
 
 | # | Ticket | Type | State |
