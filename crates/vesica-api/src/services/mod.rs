@@ -36,25 +36,37 @@
 //!
 //! Reads go straight to the reader pool and take no transaction.
 //!
-//! # The one exception to append-only auditing
+//! # The only exceptions to append-only auditing
 //!
-//! Purging a Case redacts the `before`/`after` payloads of that Case's
-//! earlier audit entries, in the purge's own transaction, because those
-//! payloads are copies of the data the purge was asked to erase
+//! A purge redacts the `before`/`after` payloads of its target's earlier
+//! audit entries, in the purge's own transaction, because those payloads are
+//! copies of the data the purge was asked to erase
 //! (`09-security-and-legal.md`: the audit log retains "only the fact that a
-//! deletion occurred"). Nothing else in this codebase alters an audit entry,
-//! and nothing else may — see
-//! [`vesica_store::repo::audit::redact_case_payloads`].
+//! deletion occurred"). There are two such paths and there must never be a
+//! third: [`vesica_store::repo::audit::redact_case_payloads`] for a Case
+//! purge, scoped by `case_id`, and
+//! [`vesica_store::repo::audit::redact_target_payloads`] for an Entity purge,
+//! scoped to that one row. They are deliberately separate — the same
+//! obligation is owed to a purged Entity, but running the case-scoped one for
+//! it would erase the payloads of every other Entity in the Case as well.
+//! Nothing else in this codebase alters an audit entry, and nothing else may.
 
 mod case;
+mod entity;
 mod error;
 mod slug;
+mod tag;
 
 pub use case::{
     AuditAction, AuditPage, AuditRecord, Case, CaseList, CaseQuery, CaseStatus, CaseStatusFilter,
     CreateCase, PurgeCase, REDACTED_BY_PURGE, REDACTED_FIELD, UpdateCase, redaction_marker,
 };
+pub use entity::{
+    Confidence, CreateEntity, DateSpan, EditProperties, Entity, EntityList, EntityQuery,
+    EntitySummary, PropertyValue, PropertyWarning, PurgeEntity, UpdateEntity,
+};
 pub use error::{Actor, ServiceError};
+pub use tag::{TagList, TagSummary};
 
 use std::sync::Arc;
 
@@ -133,6 +145,16 @@ impl Services {
     /// next ticket adds methods, not a field.
     pub fn schemas(&self) -> &SchemaRegistry {
         &self.schemas
+    }
+
+    /// A handle on the ontology that outlives `&self`.
+    ///
+    /// A transaction body is `'static` — it is sent to the writer task — so
+    /// a use case that needs the registry inside one cannot borrow it from
+    /// `self`. Cloning the `Arc` is what makes the ontology available in
+    /// there without copying the catalogue.
+    pub(crate) fn schemas_handle(&self) -> Arc<SchemaRegistry> {
+        Arc::clone(&self.schemas)
     }
 
     /// The configuration these services were built with.

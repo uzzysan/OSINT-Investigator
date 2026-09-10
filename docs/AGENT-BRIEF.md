@@ -142,9 +142,16 @@ still an open decision (wayfinder ticket 004). Never hardcode a schema id or
 property name in logic — drive everything off the registry.
 
 **On erasure**: `purge` redacts the payloads of the target's earlier audit rows
-rather than deleting them, per `docs/09-security-and-legal.md`. There is exactly
-ONE update path against `audit_log` in the codebase, documented as the sole
-exception. Do not add a second, and do not reuse the first.
+rather than deleting them, per `docs/09-security-and-legal.md`. There are exactly
+TWO update paths against `audit_log` in the codebase and they are the only
+exceptions to its append-only rule: `repo::audit::redact_case_payloads`, scoped
+by `case_id`, for a Case purge, and `repo::audit::redact_target_payloads`, scoped
+to one row, for an Entity purge (ticket 0001-09). They are separate because
+`09-security-and-legal.md` owes erasure to a purged Entity as well as a purged
+Case, and reusing the case-scoped one for a single Entity would erase the
+payloads of every other Entity in that Case as well. Both are documented at
+length where they are defined. Do not add a third, and do not reuse either for
+anything that is not an erasure.
 
 ## Your report
 

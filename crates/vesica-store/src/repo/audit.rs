@@ -159,6 +159,50 @@ pub async fn redact_case_payloads(
     Ok(result.rows_affected())
 }
 
+/// Replaces the `before`/`after` payloads of every entry about one target
+/// with `marker`, leaving every other column of every entry untouched.
+/// Returns how many rows were changed.
+///
+/// # The second, narrower half of the one exception
+///
+/// This is [`redact_case_payloads`] scoped to a single row rather than a
+/// whole case, and it exists for exactly the same obligation:
+/// `09-security-and-legal.md` says "purge removes an entity and its
+/// properties, with the audit log retaining only the fact that a deletion
+/// occurred". Purging one Entity therefore owes its data subject the same
+/// erasure a Case purge owes, and reusing the case-scoped function for it
+/// would erase the payloads of every *other* entity in the case as well —
+/// destroying history nobody asked to erase in the name of erasing history
+/// somebody did.
+///
+/// Everything the case-scoped function's documentation says applies here
+/// verbatim: no entry is deleted, no column other than `before`/`after` is
+/// touched, a column that was already null stays null, and this must not be
+/// reused for anything that is not an erasure. Between them these two
+/// functions are the whole of Vesica's ability to alter an audit entry, and
+/// there must never be a third.
+pub async fn redact_target_payloads(
+    conn: &mut SqliteConnection,
+    target_kind: &str,
+    target_id: &str,
+    marker: &str,
+) -> Result<u64, StoreError> {
+    let result = sqlx::query(
+        "UPDATE audit_log \
+            SET before = CASE WHEN before IS NULL THEN NULL ELSE ? END, \
+                after  = CASE WHEN after  IS NULL THEN NULL ELSE ? END \
+          WHERE target_kind = ? AND target_id = ? \
+            AND (before IS NOT NULL OR after IS NOT NULL)",
+    )
+    .bind(marker)
+    .bind(marker)
+    .bind(target_kind)
+    .bind(target_id)
+    .execute(&mut *conn)
+    .await?;
+    Ok(result.rows_affected())
+}
+
 /// The most recent entries for one target, newest first, bounded by
 /// [`MAX_LIST_LIMIT`] regardless of `limit`.
 pub async fn list_for_target<'e, E>(

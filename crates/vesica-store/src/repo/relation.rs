@@ -39,8 +39,11 @@ pub struct Relation {
 
 /// Persistence for relations. See the `repo` module docs for why this trait
 /// exists and why it has exactly one implementation.
-// See the comment on `EntityRepo`'s `#[allow(async_fn_in_trait)]` below;
-// the same reasoning applies to every repository trait in this module.
+// `async_fn_in_trait` is allowed because this trait is never used as a
+// `dyn` object and has exactly one implementation: the auto-trait leakage
+// the lint warns about cannot bite a caller that only ever names the
+// concrete type. The same reasoning applies to every repository trait left
+// in this module.
 #[allow(async_fn_in_trait)]
 pub trait RelationRepo: Send + Sync {
     /// Creates a new relation, generating its id and timestamps, and
@@ -123,37 +126,17 @@ impl RelationRepo for SqliteRelationRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::{EntityRepo, NewEntity, SqliteEntityRepo};
-    use crate::testing::{seed_case, test_store};
+    use crate::testing::{seed_case, seed_entity, test_store};
 
     #[tokio::test]
     async fn create_then_get_round_trips_and_references_its_endpoints() {
         let store = test_store().await.unwrap();
-        let entities = SqliteEntityRepo::new(store.db.clone());
         let relations = SqliteRelationRepo::new(store.db.clone());
 
         let case = seed_case(&store.db, "op-lighthouse").await.unwrap();
 
-        let a = entities
-            .create(NewEntity {
-                case_id: case.id.clone(),
-                schema_id: "Person".into(),
-                caption: "A".into(),
-                confidence: "probable".into(),
-                created_by: "human".into(),
-            })
-            .await
-            .unwrap();
-        let b = entities
-            .create(NewEntity {
-                case_id: case.id.clone(),
-                schema_id: "Company".into(),
-                caption: "B".into(),
-                confidence: "probable".into(),
-                created_by: "human".into(),
-            })
-            .await
-            .unwrap();
+        let a = seed_entity(&store.db, &case.id, "A").await.unwrap();
+        let b = seed_entity(&store.db, &case.id, "B").await.unwrap();
 
         let created = relations
             .create(NewRelation {
@@ -179,20 +162,10 @@ mod tests {
     #[tokio::test]
     async fn creating_a_relation_to_a_missing_entity_is_rejected() {
         let store = test_store().await.unwrap();
-        let entities = SqliteEntityRepo::new(store.db.clone());
         let relations = SqliteRelationRepo::new(store.db.clone());
 
         let case = seed_case(&store.db, "op-lighthouse").await.unwrap();
-        let a = entities
-            .create(NewEntity {
-                case_id: case.id.clone(),
-                schema_id: "Person".into(),
-                caption: "A".into(),
-                confidence: "probable".into(),
-                created_by: "human".into(),
-            })
-            .await
-            .unwrap();
+        let a = seed_entity(&store.db, &case.id, "A").await.unwrap();
 
         let result = relations
             .create(NewRelation {

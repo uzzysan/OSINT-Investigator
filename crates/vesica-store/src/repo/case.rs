@@ -313,24 +313,21 @@ mod tests {
         // rather than deleting children itself, so the cascade is worth
         // proving here: it is SQL behaviour, and it only holds while
         // `foreign_keys = ON` is set on the write connection.
-        use crate::repo::{EntityRepo, NewEntity, SqliteEntityRepo};
+        use crate::repo::entity;
 
         let store = test_store().await.unwrap();
         let case = crate::testing::seed_case(&store.db, "op-lighthouse")
             .await
             .unwrap();
-        let entities = SqliteEntityRepo::new(store.db.clone());
-        let entity = entities
-            .create(NewEntity {
-                case_id: case.id.clone(),
-                schema_id: "Person".into(),
-                caption: "Jan Kowalski".into(),
-                confidence: "probable".into(),
-                created_by: "human".into(),
-            })
+        let entity = crate::testing::seed_entity(&store.db, &case.id, "Jan Kowalski")
             .await
             .unwrap();
-        assert!(entities.get(&entity.id).await.unwrap().is_some());
+        assert!(
+            entity::find(store.db.read_pool(), &entity.id)
+                .await
+                .unwrap()
+                .is_some()
+        );
 
         let id = case.id.clone();
         store
@@ -341,7 +338,9 @@ mod tests {
 
         assert_eq!(find(store.db.read_pool(), &case.id).await.unwrap(), None);
         assert_eq!(
-            entities.get(&entity.id).await.unwrap(),
+            entity::find(store.db.read_pool(), &entity.id)
+                .await
+                .unwrap(),
             None,
             "the entity must go with its case"
         );

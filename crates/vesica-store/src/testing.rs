@@ -31,6 +31,7 @@ use tempfile::TempDir;
 use crate::error::StoreError;
 use crate::ids;
 use crate::repo::case::{self, CaseRow};
+use crate::repo::entity::{self, EntityRow};
 use crate::store::Db;
 
 /// A store backed by a database in its own temporary directory. Dropping
@@ -90,6 +91,32 @@ pub async fn seed_case(db: &Db, slug: &str) -> Result<CaseRow, StoreError> {
     };
     let stored = row.clone();
     db.transaction(move |conn| Box::pin(async move { case::insert(conn, &stored).await }))
+        .await?;
+    Ok(row)
+}
+
+/// Inserts a minimal live entity into `case_id` and returns the row, for
+/// tests in this crate that need a node for a relation, a tag or a property
+/// to hang off. Like [`seed_case`] it writes no audit entry: it is not a use
+/// case, and a store-level test proving a foreign key works does not want a
+/// service layer to exist first.
+pub async fn seed_entity(db: &Db, case_id: &str, caption: &str) -> Result<EntityRow, StoreError> {
+    let now = ids::now();
+    let row = EntityRow {
+        id: ids::new_id(),
+        case_id: case_id.to_string(),
+        schema_id: "Person".to_string(),
+        caption: caption.to_string(),
+        confidence: "probable".to_string(),
+        extra: None,
+        created_at: now.clone(),
+        created_by: "human".to_string(),
+        updated_at: now,
+        deleted_at: None,
+        merged_into: None,
+    };
+    let stored = row.clone();
+    db.transaction(move |conn| Box::pin(async move { entity::insert(conn, &stored).await }))
         .await?;
     Ok(row)
 }

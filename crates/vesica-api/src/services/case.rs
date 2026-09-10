@@ -232,6 +232,12 @@ pub enum AuditAction {
     Delete,
     Restore,
     Purge,
+    /// A tag was attached. Distinct from `update` because "who filed this
+    /// under `suspect`, and when" is a question the trail gets asked on its
+    /// own.
+    Tag,
+    /// A tag was detached.
+    Untag,
 }
 
 impl AuditAction {
@@ -245,6 +251,8 @@ impl AuditAction {
             AuditAction::Delete => "delete",
             AuditAction::Restore => "restore",
             AuditAction::Purge => "purge",
+            AuditAction::Tag => "tag",
+            AuditAction::Untag => "untag",
         }
     }
 
@@ -257,6 +265,8 @@ impl AuditAction {
             "delete" => Ok(AuditAction::Delete),
             "restore" => Ok(AuditAction::Restore),
             "purge" => Ok(AuditAction::Purge),
+            "tag" => Ok(AuditAction::Tag),
+            "untag" => Ok(AuditAction::Untag),
             other => Err(ServiceError::Inconsistent(format!(
                 "audit_log.action holds `{other}`, which no service method writes"
             ))),
@@ -751,6 +761,35 @@ impl Services {
             })
         })
         .await
+    }
+
+    /// The most recent audit entries about one target — one Entity, one
+    /// Case — newest first and bounded. Shared by every `*_audit` method so
+    /// that the row budget is clamped in exactly one place.
+    pub(super) async fn audit_for_target(
+        &self,
+        target_kind: &str,
+        target_id: &str,
+        limit: Option<usize>,
+    ) -> Result<AuditPage, ServiceError> {
+        let limit = self.page_size(limit);
+        let mut rows = audit::list_for_target(
+            self.db().read_pool(),
+            target_kind,
+            target_id,
+            (limit as i64).saturating_add(1),
+        )
+        .await?;
+        let truncated = rows.len() > limit;
+        rows.truncate(limit);
+
+        Ok(AuditPage {
+            entries: rows
+                .into_iter()
+                .map(AuditRecord::from_row)
+                .collect::<Result<Vec<_>, _>>()?,
+            truncated,
+        })
     }
 
     /// The audit trail for one Case: every change to the Case itself and,

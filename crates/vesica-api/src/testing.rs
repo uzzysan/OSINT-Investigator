@@ -38,10 +38,12 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use vesica_core::SchemaRegistry;
+use vesica_core::{PropertyValues, SchemaRegistry};
 use vesica_store::testing::{TestStore, test_store};
 
-use crate::services::{ServiceConfig, ServiceError, Services};
+use crate::services::{
+    Actor, Case, CreateCase, CreateEntity, Entity, ServiceConfig, ServiceError, Services,
+};
 
 /// A [`Services`] and the temporary database it runs against. Dropping this
 /// removes the database directory; nothing else needs cleaning up.
@@ -78,6 +80,76 @@ pub async fn test_services_with(config: ServiceConfig) -> Result<TestServices, S
         config,
     );
     Ok(TestServices { services, store })
+}
+
+/// Opens a Case through the service layer, so a test that is really about
+/// Entities gets somewhere to put them in one line.
+///
+/// `region` is the Case's default region — `Some("PL")` for the tests that
+/// care how a local phone number normalises, `None` for the ones that do
+/// not.
+pub async fn seed_case(
+    services: &Services,
+    name: &str,
+    region: Option<&str>,
+) -> Result<Case, ServiceError> {
+    services
+        .create_case(
+            CreateCase {
+                name: name.to_string(),
+                default_region: region.map(str::to_string),
+                ..Default::default()
+            },
+            &Actor::analyst(),
+        )
+        .await
+}
+
+/// Records a `Person` with one name and whatever else is passed, through
+/// the service layer, and returns it.
+///
+/// Takes the properties as `(name, values)` pairs so a test reads as the
+/// finding it is describing:
+///
+/// ```no_run
+/// # async fn example(services: &vesica_api::services::Services, case_id: &str)
+/// # -> Result<(), vesica_api::services::ServiceError> {
+/// use vesica_api::testing::seed_person;
+/// let jan = seed_person(services, case_id, &[("name", &["Jan Kowalski"]), ("phone", &["601 234 567"])]).await?;
+/// # let _ = jan;
+/// # Ok(())
+/// # }
+/// ```
+pub async fn seed_person(
+    services: &Services,
+    case_id: &str,
+    properties: &[(&str, &[&str])],
+) -> Result<Entity, ServiceError> {
+    services
+        .create_entity(
+            CreateEntity {
+                case_id: case_id.to_string(),
+                schema_id: "Person".to_string(),
+                properties: property_values(properties),
+                ..Default::default()
+            },
+            &Actor::analyst(),
+        )
+        .await
+}
+
+/// Turns the `(name, values)` pairs a test writes into the map the service
+/// layer takes.
+pub fn property_values(pairs: &[(&str, &[&str])]) -> PropertyValues {
+    pairs
+        .iter()
+        .map(|(prop, values)| {
+            (
+                (*prop).to_string(),
+                values.iter().map(|v| (*v).to_string()).collect(),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

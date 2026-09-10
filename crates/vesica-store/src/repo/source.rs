@@ -33,8 +33,11 @@ pub struct Source {
 
 /// Persistence for sources. See the `repo` module docs for why this trait
 /// exists and why it has exactly one implementation.
-// See the comment on `EntityRepo`'s `#[allow(async_fn_in_trait)]` below;
-// the same reasoning applies to every repository trait in this module.
+// `async_fn_in_trait` is allowed because this trait is never used as a
+// `dyn` object and has exactly one implementation: the auto-trait leakage
+// the lint warns about cannot bite a caller that only ever names the
+// concrete type. The same reasoning applies to every repository trait left
+// in this module.
 #[allow(async_fn_in_trait)]
 pub trait SourceRepo: Send + Sync {
     /// Creates a new source, generating its id and timestamp, and returns it

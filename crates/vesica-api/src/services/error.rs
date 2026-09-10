@@ -1,7 +1,7 @@
 //! What a service method can refuse to do, and who asked it to.
 
 use thiserror::Error;
-use vesica_core::ValidationError;
+use vesica_core::{SchemaError, ValidationError};
 use vesica_store::StoreError;
 
 /// The analyst working at the keyboard. Every audit entry that is not
@@ -162,6 +162,18 @@ impl ServiceError {
     /// the `fix` string the value layer already wrote — it knows better
     /// than this layer what a valid IBAN or country code looks like.
     pub(crate) fn from_core(field: &str, e: ValidationError) -> Self {
+        ServiceError::Validation {
+            field: field.to_string(),
+            message: e.message,
+            fix: e.fix,
+        }
+    }
+
+    /// Turns a schema-registry refusal — an unknown schema id, an attempt
+    /// to instantiate an abstract schema — into a service validation error,
+    /// keeping the `fix` the registry already wrote: it knows the
+    /// catalogue, and this layer must never hardcode one.
+    pub(crate) fn from_schema(field: &str, e: SchemaError) -> Self {
         ServiceError::Validation {
             field: field.to_string(),
             message: e.message,
