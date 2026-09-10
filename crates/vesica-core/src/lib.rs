@@ -39,6 +39,7 @@ mod checksum_algo;
 mod date;
 mod fold;
 mod property;
+mod schema;
 mod warning;
 
 pub use crate::checksum_algo::{
@@ -49,6 +50,10 @@ pub use crate::date::{DateError, DateOrder, DatePrecision, DateStyle, ParsedDate
 pub use crate::property::{
     BlockingKey, BlockingKeyKind, ErrorCode, IdentifierScheme, MatchWeight, NormalizeContext,
     Normalized, PropertyType, PropertyTypeParseError, ValidationError,
+};
+pub use crate::schema::{
+    EndpointSpec, EntitySchema, PropertyDef, PropertyValues, RelationSchema, SchemaError,
+    SchemaErrorCode, SchemaRegistry, render_entity_caption, render_relation_caption,
 };
 pub use crate::warning::{Warning, WarningCode};
 

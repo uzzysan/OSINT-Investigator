@@ -1,0 +1,87 @@
+# cargo-deny configuration — ticket 0001-05 (CI pipeline and one-command
+# install). Run with `cargo deny check` (or `just audit`).
+#
+# Checked: `licenses` (every dependency must carry a licence we can ship
+# under), `advisories` (RustSec — known-vulnerable, unmaintained or yanked
+# crates), `bans` (banned crates and duplicate-version bloat), and `sources`
+# (only crates.io — no ad-hoc git dependencies smuggled into the supply
+# chain). See AGENT-BRIEF.md's dependency policy: this project holds other
+# people's investigations, so what goes into the binary is a decision, not a
+# convenience.
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# ---------------------------------------------------------------------------
+# advisories: RustSec advisory database — vulnerable, unmaintained, unsound
+# or yanked crates.
+# ---------------------------------------------------------------------------
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+ignore = [
+    # RUSTSEC-2023-0089: atomic-polyfill is marked unmaintained (not a
+    # vulnerability) by its own author, who points to `portable-atomic` as
+    # the replacement. It reaches us as heapless -> postcard ->
+    # phonenumber (build-dependency, code-generation only, never in the
+    # shipped binary) -> vesica-core. phonenumber 0.3 pins this transitively
+    # and offers no feature to swap it out; revisit on a phonenumber upgrade
+    # that drops it.
+    { id = "RUSTSEC-2023-0089", reason = "unmaintained notice only, reached via a build-dependency (phonenumber's codegen), not in the shipped binary" },
+]
+
+# ---------------------------------------------------------------------------
+# licenses: every crate in the resolved graph must carry one of these.
+# ---------------------------------------------------------------------------
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "Unicode-3.0",
+    "Zlib",
+    "MPL-2.0",
+    "Unlicense",
+]
+confidence-threshold = 0.8
+
+# Vesica's own crates are `publish = false` (workspace license is still
+# undecided — see Cargo.toml / ticket 0001-01) and must not be license-checked
+# as if they were being published.
+[licenses.private]
+ignore = true
+
+# ---------------------------------------------------------------------------
+# bans: no banned crates; duplicate versions are reported but don't fail CI
+# on their own — real dependency trees carry a few from unrelated crates
+# pinning different minor versions of a leaf crate (e.g. `syn`, `nom`,
+# `hashbrown`). Flip to "deny" if the tree should be tightened further.
+#
+# `wildcards` is left at its default ("allow") rather than "deny": every
+# in-workspace crate depends on its sibling crates as bare `{ path = ... }`
+# entries with no version requirement, which is normal Rust workspace style
+# and is what cargo-deny's wildcard check flags — it is not a supply-chain
+# risk the way an external `foo = "*"` dependency would be.
+# ---------------------------------------------------------------------------
+[bans]
+multiple-versions = "warn"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow-workspace = true
+
+# ---------------------------------------------------------------------------
+# sources: crates.io only. A git dependency here would mean an unreviewed,
+# unversioned supply-chain path into a tool that holds other people's
+# investigations.
+# ---------------------------------------------------------------------------
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -1,0 +1,23 @@
+# Shape pinned by 04-data-model.md section 4.1.2 — follow it exactly.
+id: Person
+label: Person
+plural: People
+extends: [LegalEntity]
+icon: user
+color: "#3b82f6"
+caption: "{name}"
+matchable: true
+properties:
+  - { name: name,        type: name,       label: Name,            multiple: true, required: true }
+  - { name: alias,       type: name,       label: Also known as,   multiple: true }
+  - { name: birthDate,   type: date,       label: Date of birth }
+  - { name: birthPlace,  type: address,    label: Place of birth }
+  - { name: nationality, type: country,    label: Nationality,     multiple: true }
+  - { name: gender,      type: text,       label: Gender }
+  - { name: idNumber,    type: identifier, label: ID number,       multiple: true }
+  - { name: taxNumber,   type: identifier, label: Tax number,      multiple: true }
+  - { name: email,       type: email,      label: Email,           multiple: true }
+  - { name: phone,       type: phone,      label: Phone,           multiple: true }
+  - { name: address,     type: address,    label: Address,         multiple: true }
+  - { name: position,    type: text,       label: Position,        multiple: true }
+  - { name: notes,       type: text,       label: Notes }

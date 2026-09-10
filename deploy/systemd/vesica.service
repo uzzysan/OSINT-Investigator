@@ -1,0 +1,42 @@
+# Vesica systemd unit — installed by deploy/install.sh to
+# /etc/systemd/system/vesica.service. See 08-deployment.md section 8.4.
+#
+# NOTE on User/Group: 08-deployment.md section 8.2 step 6 says the installer
+# creates "a dedicated system user `vesica`", but the unit example in
+# section 8.4 of the same document names it `osint`. That's inconsistent
+# with the rest of the document (and with the product name settled in
+# AGENT-BRIEF.md); this file follows section 8.2 and uses `vesica`, the name
+# the installer actually creates. Flagged in the ticket report rather than
+# silently "fixed" in the doc, per AGENT-BRIEF.md rule 10.
+
+[Unit]
+Description=Vesica
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=vesica
+Group=vesica
+WorkingDirectory=/opt/vesica
+EnvironmentFile=/opt/vesica/.env
+ExecStart=/opt/vesica/bin/vesica serve
+Restart=on-failure
+RestartSec=3
+StateDirectory=vesica
+
+# hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+ReadWritePaths=/var/lib/vesica
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

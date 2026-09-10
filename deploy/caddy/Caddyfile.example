@@ -1,0 +1,16 @@
+# Example Caddy reverse-proxy config for Vesica — see 08-deployment.md
+# section 8.7. Vesica itself speaks plain HTTP and does not terminate TLS;
+# for anything beyond localhost, put this (or nginx) in front of it.
+#
+# Copy this file to /etc/caddy/Caddyfile (or include it from one), replace
+# osint.example.org with your real hostname, and reload Caddy. Caddy
+# obtains and renews a certificate automatically — no manual ACME setup.
+#
+#   sudo cp deploy/caddy/Caddyfile.example /etc/caddy/Caddyfile
+#   $EDITOR /etc/caddy/Caddyfile   # set your hostname
+#   sudo systemctl reload caddy
+
+osint.example.org {
+    reverse_proxy 127.0.0.1:8787
+    encode zstd gzip
+}

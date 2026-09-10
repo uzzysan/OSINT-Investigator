@@ -1,0 +1,892 @@
+{
+  "entities": {
+    "Address": {
+      "id": "Address",
+      "label": "Address",
+      "plural": "Addresses",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "map-pin",
+      "color": "#f97316",
+      "caption": "{line}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "line",
+          "ptype": "address",
+          "label": "Address",
+          "multiple": false,
+          "required": true
+        },
+        {
+          "name": "country",
+          "ptype": "country",
+          "label": "Country",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "BankAccount": {
+      "id": "BankAccount",
+      "label": "Bank account",
+      "plural": "Bank accounts",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "landmark",
+      "color": "#eab308",
+      "caption": "{iban}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "iban",
+          "ptype": "iban",
+          "label": "IBAN",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "accountNumber",
+          "ptype": "identifier",
+          "label": "Account number",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "bankName",
+          "ptype": "text",
+          "label": "Bank name",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "currency",
+          "ptype": "text",
+          "label": "Currency",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Company": {
+      "id": "Company",
+      "label": "Company",
+      "plural": "Companies",
+      "extends": [
+        "LegalEntity"
+      ],
+      "ancestors": [
+        "Thing",
+        "LegalEntity"
+      ],
+      "icon": "building",
+      "color": "#0ea5e9",
+      "caption": "{name}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "jurisdiction",
+          "ptype": "country",
+          "label": "Jurisdiction",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "status",
+          "ptype": "text",
+          "label": "Status",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "name",
+          "ptype": "name",
+          "label": "Name",
+          "multiple": true,
+          "required": true
+        },
+        {
+          "name": "alias",
+          "ptype": "name",
+          "label": "Trading as",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "registrationNumber",
+          "ptype": "identifier",
+          "label": "Registration number",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "taxNumber",
+          "ptype": "identifier",
+          "label": "Tax number",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "incorporationDate",
+          "ptype": "date",
+          "label": "Incorporation date",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "address",
+          "ptype": "address",
+          "label": "Address",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "email",
+          "ptype": "email",
+          "label": "Email",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "phone",
+          "ptype": "phone",
+          "label": "Phone",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "website",
+          "ptype": "url",
+          "label": "Website",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "industry",
+          "ptype": "text",
+          "label": "Industry",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Document": {
+      "id": "Document",
+      "label": "Document",
+      "plural": "Documents",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "file-text",
+      "color": "#78716c",
+      "caption": "{title}",
+      "matchable": false,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "title",
+          "ptype": "text",
+          "label": "Title",
+          "multiple": false,
+          "required": true
+        },
+        {
+          "name": "docType",
+          "ptype": "text",
+          "label": "Document type",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "issuedDate",
+          "ptype": "date",
+          "label": "Issued",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "issuer",
+          "ptype": "text",
+          "label": "Issuer",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Email": {
+      "id": "Email",
+      "label": "Email address",
+      "plural": "Email addresses",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "mail",
+      "color": "#22c55e",
+      "caption": "{address}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "address",
+          "ptype": "email",
+          "label": "Email address",
+          "multiple": false,
+          "required": true
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "LegalEntity": {
+      "id": "LegalEntity",
+      "label": "Legal entity",
+      "plural": "Legal entities",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "briefcase",
+      "color": "#6366f1",
+      "caption": null,
+      "matchable": false,
+      "is_abstract": true,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "jurisdiction",
+          "ptype": "country",
+          "label": "Jurisdiction",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "status",
+          "ptype": "text",
+          "label": "Status",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Person": {
+      "id": "Person",
+      "label": "Person",
+      "plural": "People",
+      "extends": [
+        "LegalEntity"
+      ],
+      "ancestors": [
+        "Thing",
+        "LegalEntity"
+      ],
+      "icon": "user",
+      "color": "#3b82f6",
+      "caption": "{name}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "jurisdiction",
+          "ptype": "country",
+          "label": "Jurisdiction",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "status",
+          "ptype": "text",
+          "label": "Status",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "name",
+          "ptype": "name",
+          "label": "Name",
+          "multiple": true,
+          "required": true
+        },
+        {
+          "name": "alias",
+          "ptype": "name",
+          "label": "Also known as",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "birthDate",
+          "ptype": "date",
+          "label": "Date of birth",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "birthPlace",
+          "ptype": "address",
+          "label": "Place of birth",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "nationality",
+          "ptype": "country",
+          "label": "Nationality",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "gender",
+          "ptype": "text",
+          "label": "Gender",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "idNumber",
+          "ptype": "identifier",
+          "label": "ID number",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "taxNumber",
+          "ptype": "identifier",
+          "label": "Tax number",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "email",
+          "ptype": "email",
+          "label": "Email",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "phone",
+          "ptype": "phone",
+          "label": "Phone",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "address",
+          "ptype": "address",
+          "label": "Address",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "position",
+          "ptype": "text",
+          "label": "Position",
+          "multiple": true,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Phone": {
+      "id": "Phone",
+      "label": "Phone number",
+      "plural": "Phone numbers",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "phone",
+      "color": "#14b8a6",
+      "caption": "{number}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "number",
+          "ptype": "phone",
+          "label": "Phone number",
+          "multiple": false,
+          "required": true
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Thing": {
+      "id": "Thing",
+      "label": "Thing",
+      "plural": "Things",
+      "extends": [],
+      "ancestors": [],
+      "icon": "circle",
+      "color": "#6b7280",
+      "caption": null,
+      "matchable": false,
+      "is_abstract": true,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Vehicle": {
+      "id": "Vehicle",
+      "label": "Vehicle",
+      "plural": "Vehicles",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "car",
+      "color": "#ef4444",
+      "caption": "{plate}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "vin",
+          "ptype": "identifier",
+          "label": "VIN",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "plate",
+          "ptype": "identifier",
+          "label": "License plate",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "make",
+          "ptype": "text",
+          "label": "Make",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "model",
+          "ptype": "text",
+          "label": "Model",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "year",
+          "ptype": "number",
+          "label": "Year",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "color",
+          "ptype": "text",
+          "label": "Color",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Website": {
+      "id": "Website",
+      "label": "Website",
+      "plural": "Websites",
+      "extends": [
+        "Thing"
+      ],
+      "ancestors": [
+        "Thing"
+      ],
+      "icon": "globe",
+      "color": "#8b5cf6",
+      "caption": "{url}",
+      "matchable": true,
+      "is_abstract": false,
+      "properties": [
+        {
+          "name": "firstSeen",
+          "ptype": "date",
+          "label": "First observed",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "url",
+          "ptype": "url",
+          "label": "URL",
+          "multiple": false,
+          "required": true
+        },
+        {
+          "name": "domain",
+          "ptype": "domain",
+          "label": "Domain",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "notes",
+          "ptype": "text",
+          "label": "Notes",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    }
+  },
+  "relations": {
+    "Associate": {
+      "id": "Associate",
+      "label": "Associate",
+      "source": {
+        "label": "Thing",
+        "schemas": [
+          "Thing"
+        ]
+      },
+      "target": {
+        "label": "Thing",
+        "schemas": [
+          "Thing"
+        ]
+      },
+      "directed": false,
+      "interval": false,
+      "color": "#64748b",
+      "caption": null,
+      "properties": [
+        {
+          "name": "relationType",
+          "ptype": "text",
+          "label": "Relation type",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "note",
+          "ptype": "text",
+          "label": "Note",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Directorship": {
+      "id": "Directorship",
+      "label": "Directorship",
+      "source": {
+        "label": "Director",
+        "schemas": [
+          "Person"
+        ]
+      },
+      "target": {
+        "label": "Company",
+        "schemas": [
+          "Company"
+        ]
+      },
+      "directed": true,
+      "interval": true,
+      "color": "#0ea5e9",
+      "caption": null,
+      "properties": [
+        {
+          "name": "role",
+          "ptype": "text",
+          "label": "Role",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "title",
+          "ptype": "text",
+          "label": "Title",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Employment": {
+      "id": "Employment",
+      "label": "Employment",
+      "source": {
+        "label": "Employee",
+        "schemas": [
+          "Person"
+        ]
+      },
+      "target": {
+        "label": "Employer",
+        "schemas": [
+          "LegalEntity",
+          "Company"
+        ]
+      },
+      "directed": true,
+      "interval": true,
+      "color": "#22c55e",
+      "caption": null,
+      "properties": [
+        {
+          "name": "role",
+          "ptype": "text",
+          "label": "Role",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "department",
+          "ptype": "text",
+          "label": "Department",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Family": {
+      "id": "Family",
+      "label": "Family",
+      "source": {
+        "label": "Person",
+        "schemas": [
+          "Person"
+        ]
+      },
+      "target": {
+        "label": "Person",
+        "schemas": [
+          "Person"
+        ]
+      },
+      "directed": false,
+      "interval": true,
+      "color": "#ec4899",
+      "caption": null,
+      "properties": [
+        {
+          "name": "relationType",
+          "ptype": "text",
+          "label": "Relation type",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Ownership": {
+      "id": "Ownership",
+      "label": "Ownership",
+      "source": {
+        "label": "Owner",
+        "schemas": [
+          "LegalEntity",
+          "Person",
+          "Company"
+        ]
+      },
+      "target": {
+        "label": "Asset",
+        "schemas": [
+          "Thing"
+        ]
+      },
+      "directed": true,
+      "interval": true,
+      "color": "#f59e0b",
+      "caption": null,
+      "properties": [
+        {
+          "name": "percentage",
+          "ptype": "number",
+          "label": "Share percent",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "sharesCount",
+          "ptype": "number",
+          "label": "Number of shares",
+          "multiple": false,
+          "required": false
+        },
+        {
+          "name": "role",
+          "ptype": "text",
+          "label": "Role",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    },
+    "Registration": {
+      "id": "Registration",
+      "label": "Registration",
+      "source": {
+        "label": "Registrant",
+        "schemas": [
+          "LegalEntity",
+          "Person",
+          "Company"
+        ]
+      },
+      "target": {
+        "label": "Registered",
+        "schemas": [
+          "Thing"
+        ]
+      },
+      "directed": true,
+      "interval": true,
+      "color": "#a855f7",
+      "caption": null,
+      "properties": [
+        {
+          "name": "role",
+          "ptype": "text",
+          "label": "Role",
+          "multiple": false,
+          "required": false
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+id: BankAccount
+label: Bank account
+plural: Bank accounts
+extends: [Thing]
+icon: landmark
+color: "#eab308"
+caption: "{iban}"
+matchable: true
+properties:
+  - { name: iban,          type: iban,       label: IBAN }
+  - { name: accountNumber, type: identifier, label: Account number }
+  - { name: bankName,      type: text,       label: Bank name }
+  - { name: currency,      type: text,       label: Currency }
+  - { name: notes,         type: text,       label: Notes }

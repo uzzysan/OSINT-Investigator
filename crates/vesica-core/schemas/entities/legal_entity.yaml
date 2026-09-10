@@ -1,0 +1,14 @@
+# Shared ancestor for anything that can own, direct, employ or be a party to
+# a registration: people and companies today, other legal persons later.
+# Abstract: never instantiated directly.
+id: LegalEntity
+label: Legal entity
+plural: Legal entities
+extends: [Thing]
+abstract: true
+icon: briefcase
+color: "#6366f1"
+matchable: false
+properties:
+  - { name: jurisdiction, type: country, label: Jurisdiction }
+  - { name: status,       type: text,    label: Status }

@@ -1,0 +1,14 @@
+# Root of the entity hierarchy. Purely a classification anchor: every other
+# entity schema extends it, directly or transitively, and relation endpoint
+# constraints use `Thing` to mean "any entity at all" (see Ownership's
+# target in relations/ownership.yaml). Abstract: never instantiated.
+id: Thing
+label: Thing
+plural: Things
+extends: []
+abstract: true
+icon: circle
+color: "#6b7280"
+matchable: false
+properties:
+  - { name: firstSeen, type: date, label: First observed }

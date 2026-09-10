@@ -1,0 +1,20 @@
+id: Company
+label: Company
+plural: Companies
+extends: [LegalEntity]
+icon: building
+color: "#0ea5e9"
+caption: "{name}"
+matchable: true
+properties:
+  - { name: name,              type: name,       label: Name,                multiple: true, required: true }
+  - { name: alias,              type: name,       label: Trading as,          multiple: true }
+  - { name: registrationNumber, type: identifier, label: Registration number, multiple: true }
+  - { name: taxNumber,          type: identifier, label: Tax number,          multiple: true }
+  - { name: incorporationDate,  type: date,       label: Incorporation date }
+  - { name: address,            type: address,    label: Address,             multiple: true }
+  - { name: email,              type: email,      label: Email,               multiple: true }
+  - { name: phone,              type: phone,      label: Phone,               multiple: true }
+  - { name: website,            type: url,        label: Website,             multiple: true }
+  - { name: industry,           type: text,       label: Industry }
+  - { name: notes,              type: text,       label: Notes }

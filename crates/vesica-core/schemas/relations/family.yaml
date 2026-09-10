@@ -1,0 +1,9 @@
+id: Family
+label: Family
+source: { label: Person, schemas: [Person] }
+target: { label: Person, schemas: [Person] }
+directed: false
+interval: true
+color: "#ec4899"
+properties:
+  - { name: relationType, type: text, label: Relation type }

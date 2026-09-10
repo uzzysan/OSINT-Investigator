@@ -1,0 +1,10 @@
+id: Employment
+label: Employment
+source: { label: Employee, schemas: [Person] }
+target: { label: Employer, schemas: [LegalEntity, Company] }
+directed: true
+interval: true
+color: "#22c55e"
+properties:
+  - { name: role,       type: text, label: Role }
+  - { name: department, type: text, label: Department }

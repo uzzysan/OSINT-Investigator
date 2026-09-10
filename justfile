@@ -22,13 +22,12 @@ lint:
 fmt:
     cargo fmt --all -- --check
 
-# Dependency-audit: a stub until ticket 05 (CI) wires `cargo-audit` (or
-# `cargo-deny`) into a scheduled job with an advisory-db cache. Running an
-# audit here today would need network access to fetch the RustSec advisory
-# database on every invocation, which this recipe intentionally does not
-# assume. Once ticket 05 lands, replace this with `cargo audit`.
+# Dependency-audit: licences, RustSec advisories, banned/duplicate crates and
+# dependency sources — see deny.toml for the actual policy. Needs network
+# access on first run (or a stale local cache) to fetch the RustSec advisory
+# database; CI runs this via EmbarkStudios/cargo-deny-action, which caches it.
 audit:
-    @echo "audit: stub — ticket 05 (CI) wires 'cargo audit' against the RustSec advisory database. Not run here."
+    cargo deny check
 
 # Mechanically verify the one-way crate dependency direction (see
 # scripts/check-deps.py and 03-architecture.md section 3.3).

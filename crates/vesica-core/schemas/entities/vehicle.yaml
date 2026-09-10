@@ -1,0 +1,16 @@
+id: Vehicle
+label: Vehicle
+plural: Vehicles
+extends: [Thing]
+icon: car
+color: "#ef4444"
+caption: "{plate}"
+matchable: true
+properties:
+  - { name: vin,   type: identifier, label: VIN }
+  - { name: plate, type: identifier, label: License plate }
+  - { name: make,  type: text,       label: Make }
+  - { name: model, type: text,       label: Model }
+  - { name: year,  type: number,     label: Year }
+  - { name: color, type: text,       label: Color }
+  - { name: notes, type: text,       label: Notes }

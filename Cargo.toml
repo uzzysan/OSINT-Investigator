@@ -23,11 +23,15 @@ publish = false
 # `dep.workspace = true`. Never pin a different version of one of these inside
 # a member crate — see AGENT-BRIEF.md, "Toolchain and dependency policy".
 [workspace.dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "signal", "sync"] }
 axum = "0.8"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "fs"] }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate"] }
+# "derive" enables `#[derive(sqlx::FromRow)]` for runtime-checked `query_as`
+# row mapping only. This is NOT the compile-time `query!`/`query_as!`/
+# `query_scalar!` macro family that needs a live DATABASE_URL — see
+# AGENT-BRIEF.md's sqlx paragraph. Do not add the "macros" feature.
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "migrate", "derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
@@ -39,7 +43,13 @@ chrono = { version = "0.4", features = ["serde"] }
 ulid = { version = "1", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 figment = { version = "0.10", features = ["env"] }
-rust-embed = "8"
+# "interpolate-folder-path" lets `#[folder = "$CARGO_MANIFEST_DIR/..."]`
+# resolve relative to the embedding crate's own manifest rather than
+# whatever directory the binary happens to be run from — without it,
+# `$CARGO_MANIFEST_DIR` is not substituted at all and the literal,
+# nonexistent path is used, so this is not optional for vesica-api's
+# embedded frontend (ticket 0001-04).
+rust-embed = { version = "8", features = ["interpolate-folder-path"] }
 
 # --- Pure value-layer dependencies (ticket 0001-06). ---------------------
 # Every crate below is computation-only: no filesystem, no network, no
@@ -61,3 +71,9 @@ strsim = "0.11"
 
 # Test-only.
 proptest = "1"
+# tempfile backs `vesica_store::testing::test_store()` (ticket 0001-03), the
+# shared test harness later tickets reuse. It has to be a normal dependency
+# of vesica-store, not dev-only: a crate's dev-dependencies are not visible
+# to other crates that depend on it, and other crates' tests are exactly who
+# calls this harness.
+tempfile = "3"

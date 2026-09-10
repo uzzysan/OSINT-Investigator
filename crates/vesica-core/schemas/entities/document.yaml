@@ -1,0 +1,14 @@
+id: Document
+label: Document
+plural: Documents
+extends: [Thing]
+icon: file-text
+color: "#78716c"
+caption: "{title}"
+matchable: false
+properties:
+  - { name: title,      type: text, label: Title, required: true }
+  - { name: docType,    type: text, label: Document type }
+  - { name: issuedDate, type: date, label: Issued }
+  - { name: issuer,     type: text, label: Issuer }
+  - { name: notes,      type: text, label: Notes }

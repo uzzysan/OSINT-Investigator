@@ -1,0 +1,12 @@
+id: Website
+label: Website
+plural: Websites
+extends: [Thing]
+icon: globe
+color: "#8b5cf6"
+caption: "{url}"
+matchable: true
+properties:
+  - { name: url,    type: url,    label: URL,    required: true }
+  - { name: domain, type: domain, label: Domain }
+  - { name: notes,  type: text,   label: Notes }

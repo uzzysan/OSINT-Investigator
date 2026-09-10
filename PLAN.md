@@ -4,9 +4,9 @@
 between sections, record what was learned. If the plan and the code disagree,
 the plan is wrong and gets fixed.
 
-- **Status**: Design complete, implementation not started
+- **Status**: M0 complete — the workspace builds, the service runs, the installer works
 - **Last updated**: 2026-09-08
-- **Current milestone**: M0 — Foundations
+- **Current milestone**: M1 — Domain and storage (partly delivered early by tickets 03, 06 and 07)
 
 ---
 
@@ -30,7 +30,7 @@ work approaches them. M0 and M1 are covered by
 
 | Milestone | Theme | Status | Exit condition |
 | --- | --- | --- | --- |
-| M0 | Foundations | `[~]` in progress | `cargo test` and `install.sh` both run green on an empty app |
+| M0 | Foundations | `[x]` **done** | `cargo test` and `install.sh` both run green on an empty app |
 | M1 | Domain and storage | `[ ]` | Entities and relations round-trip through SQLite with full audit |
 | M2 | API and MCP skeleton | `[ ]` | An agent creates a case and 20 entities through MCP alone |
 | M3 | Web UI and canvas | `[ ]` | A human builds a 50-entity case in the browser without docs |
@@ -52,19 +52,20 @@ does nothing. Everything after this is filling it in.*
 - [x] [Spec 0001](docs/specs/0001-foundation-and-domain-core.md) written for M0 + M1 (75 user stories, seams chosen)
 - [x] Spec 0001 broken into [15 agent-ready tickets](docs/specs/0001/issues/) with blocking edges
 - [x] [Design system](docs/10-design-system.md) — brand mark, light/dark tokens, type scale, components, motion, mobile
-- [ ] Cargo workspace with the eight crates from `docs/03-architecture.md`
-- [ ] `vesica` binary: config loading from env + `.env`, `tracing` setup, CLI
+- [x] Cargo workspace with the eight crates from `docs/03-architecture.md`
+- [x] `vesica` binary: config loading from env + `.env`, `tracing` setup, CLI
       subcommands stubbed (`serve`, `mcp`, `migrate`, `backup`, `check`)
-- [ ] axum server binding a configurable port, `/api/v1/health` and `/ready`
-- [ ] SQLite connection pool, WAL pragmas, `sqlx` migration runner on startup
-- [ ] Vite + React + TypeScript scaffold in `web/`, `rust-embed` wiring, dev proxy
-- [ ] `justfile`: `dev`, `build`, `test`, `lint`, `fmt`, `audit`
-- [ ] CI: fmt, clippy `-D warnings`, test, `cargo deny`, `gitleaks`, web build
-- [ ] `deploy/install.sh` skeleton that gets this far end to end
-- [ ] `docs/CONTRIBUTING.md` and `STATUS.md`
+- [x] axum server binding a configurable port, `/api/v1/health` and `/ready`
+- [x] SQLite connection pool, WAL pragmas, `sqlx` migration runner on startup
+- [x] Vite + React + TypeScript scaffold in `web/`, `rust-embed` wiring, dev proxy
+- [x] `justfile`: `dev`, `build`, `test`, `lint`, `fmt`, `audit`
+- [x] CI: fmt, clippy `-D warnings`, test, `cargo deny`, `gitleaks`, web build
+- [x] `deploy/install.sh` that gets this far end to end
+- [x] `docs/CONTRIBUTING.md` and `STATUS.md`
 
-**Exit**: `just test` green; `./deploy/install.sh` on a clean container yields a
-service answering `/api/v1/health`.
+**Exit**: MET on 2026-09-09 — 160 tests green, fmt/clippy/check-deps clean, the
+installer runs end to end and the service answers `/api/v1/health` and
+`/api/v1/ready`.
 
 ---
 
@@ -72,21 +73,21 @@ service answering `/api/v1/health`.
 
 *Goal: the data model, correct and tested, with no HTTP in sight.*
 
-- [ ] `vesica-core`: `PropertyType` enum with parse + validate per type
-- [ ] `vesica-core`: normalisation — names, emails, phones (E.164), domains, URLs,
+- [x] `vesica-core`: `PropertyType` enum with parse + validate per type
+- [x] `vesica-core`: normalisation — names, emails, phones (E.164), domains, URLs,
       identifiers with checksums (IBAN, NIP, PESEL, VIN), partial dates
-- [ ] `vesica-core`: schema registry loading embedded YAML; inheritance resolution
-- [ ] Author the ~30 built-in entity schemas and ~15 relation schemas
-- [ ] `vesica-core`: caption derivation, ULID ids, validation errors carrying `fix`
-- [ ] Migrations 0001–00xx implementing `docs/04-data-model.md`
-- [ ] `vesica-store`: repositories for case, entity, relation, source, blob, audit
-- [ ] Single-writer task + reader pool; every multi-step write in a transaction
-- [ ] FTS5 table and sync triggers
-- [ ] Graph queries: neighbourhood CTE, shortest path, connected components,
+- [x] `vesica-core`: schema registry loading embedded YAML; inheritance resolution
+- [~] Author the built-in entity schemas (provisional starter set of 11 + 6 shipped; full catalogue pending ticket 004) and ~15 relation schemas
+- [x] `vesica-core`: caption derivation, ULID ids, validation errors carrying `fix`
+- [x] Migrations 0001–0006 implementing `docs/04-data-model.md`
+- [~] `vesica-store`: repositories for case, entity, relation, source, blob, audit
+- [x] Single-writer task + reader pool; every multi-step write in a transaction
+- [x] FTS5 table and sync triggers
+- [~] Graph queries: neighbourhood CTE (bounded neighbours done; shortest path and components pending), shortest path, connected components,
       each with a depth limit, a node budget and a `truncated` flag
 - [ ] Audit log written on every mutation, with `batch_id` grouping
 - [ ] Soft delete, restore, purge
-- [ ] Property-based tests for normalisation; golden tests for the schema registry
+- [x] Property-based tests for normalisation; golden tests for the schema registry
 
 **Exit**: a test creates a case, 1,000 entities and 3,000 relations, queries
 neighbours at depth 3, and asserts the audit log is complete.

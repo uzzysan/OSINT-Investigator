@@ -1,0 +1,16 @@
+# Shape pinned by 04-data-model.md section 4.1.3 — follow it exactly. The
+# upstream example's source.schemas also names `Organization`, which is not
+# in this starter catalogue (04-data-model.md 4.1.4 lists it only as a
+# possible future abstract schema); omitted here so every endpoint
+# constraint resolves. See the ticket-07 report for this deviation.
+id: Ownership
+label: Ownership
+source: { label: Owner, schemas: [LegalEntity, Person, Company] }
+target: { label: Asset, schemas: [Thing] }
+directed: true
+interval: true
+color: "#f59e0b"
+properties:
+  - { name: percentage,  type: number, label: Share percent }
+  - { name: sharesCount, type: number, label: Number of shares }
+  - { name: role,        type: text,   label: Role }

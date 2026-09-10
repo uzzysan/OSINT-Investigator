@@ -1,0 +1,126 @@
+name: CI
+
+# One pipeline, four independent gates: a push or PR that breaks formatting,
+# trips a lint, fails a test, pulls in a vulnerable/unlicensed/duplicated
+# dependency or commits a secret is rejected automatically. See
+# specs/0001/issues/05-ci-pipeline-and-one-command-install.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch/PR instead of burning CI minutes
+# on a commit nobody cares about anymore.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Fail fast on a broken/incomplete Cargo.lock rather than silently
+  # re-resolving it in CI.
+  CARGO_NET_RETRY: 3
+
+jobs:
+  # ---------------------------------------------------------------------
+  # Rust: formatting, lints-as-errors, workspace tests, and the mechanical
+  # crate-dependency-direction check (scripts/check-deps.py via `just`).
+  # ---------------------------------------------------------------------
+  rust:
+    name: rust (fmt, clippy, test, check-deps)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-toolchain.toml at the repo root pins the exact channel
+      # (1.95.0) and components (rustfmt, clippy) — this just makes sure
+      # rustup has materialised it before the first cargo invocation below,
+      # rather than relying on lazy auto-install mid-step.
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Cache cargo registry and target directory
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Bust the cache whenever deny.toml's dependency policy changes
+          # too, not just Cargo.lock — a licence/advisory-allow-list edit
+          # can be as consequential as a version bump.
+          key: ${{ hashFiles('deny.toml') }}
+
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy (warnings are errors)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: cargo test --workspace
+        run: cargo test --workspace
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: just check-deps (crate dependency direction)
+        run: just check-deps
+
+  # ---------------------------------------------------------------------
+  # Dependency policy: licences, RustSec advisories, banned/duplicate
+  # crates, and dependency sources — see deny.toml for the actual rules.
+  # ---------------------------------------------------------------------
+  cargo-deny:
+    name: cargo-deny (licences, advisories, bans, sources)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --workspace
+
+  # ---------------------------------------------------------------------
+  # Secret scanning over the full commit history, not just the diff — a
+  # secret introduced and later "removed" in a follow-up commit is still a
+  # leak.
+  # ---------------------------------------------------------------------
+  gitleaks:
+    name: gitleaks (secret scanning)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Pinned to the exact release verified locally (see the ticket
+      # report) rather than a floating "latest" tag, so a compromised or
+      # behaviour-changing gitleaks release can't silently start passing
+      # (or failing) CI.
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          curl -sSL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          sudo install -m 0755 /tmp/gitleaks /usr/local/bin/gitleaks
+          gitleaks version
+
+      - name: gitleaks detect
+        run: gitleaks detect --source . -v
+
+  # ---------------------------------------------------------------------
+  # Web: the React/Vite frontend embedded into the `vesica` binary must
+  # build cleanly on its own before anything tries to embed it.
+  # ---------------------------------------------------------------------
+  web:
+    name: web (npm build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run build

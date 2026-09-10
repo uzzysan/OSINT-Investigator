@@ -382,9 +382,21 @@ WITH RECURSIVE reach(id, depth) AS (
   JOIN relation r ON (r.source_id_ = reach.id OR r.target_id = reach.id)
                  AND r.deleted_at IS NULL
   WHERE reach.depth < :max_depth
-)
-SELECT id, MIN(depth) AS depth FROM reach GROUP BY id LIMIT :budget;
+),
+capped AS (SELECT id, depth FROM reach LIMIT :work_cap)
+SELECT id,
+       MIN(depth) AS depth,
+       (SELECT COUNT(*) FROM capped) >= :work_cap AS truncated
+FROM capped GROUP BY id LIMIT :budget;
 ```
+
+The `capped` step is load-bearing, not decoration. Applying `LIMIT` only to the
+grouped output bounds the *answer* while leaving the recursion free to run: a
+start node that reaches a cycle produces rows for every node in it at every
+depth up to `:max_depth`, however small `:budget` is. `:work_cap` bounds the
+work as well as the result. SQLite rejects `SELECT COUNT(*) FROM reach` inside
+the recursive term as a second recursive reference, which is why the cap sits in
+an overlying CTE rather than in the recursion itself.
 
 Every traversal is bounded by both a depth limit and a node budget, and returns
 a `truncated` flag so the UI and agents know the answer is partial rather than

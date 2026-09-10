@@ -43,9 +43,16 @@ ALLOWED_INTERNAL_EDGES: dict[str, set[str]] = {
     "vesica-resolve": {"vesica-core"},
     "vesica-import": {"vesica-core"},
     "vesica-report": {"vesica-core"},
-    "vesica-api": {"vesica-report", "vesica-import", "vesica-resolve", "vesica-store"},
-    "vesica-mcp": {"vesica-report", "vesica-import", "vesica-resolve", "vesica-store"},
-    "vesica": {"vesica-api", "vesica-mcp"},
+    "vesica-api": {"vesica-core", "vesica-report", "vesica-import", "vesica-resolve", "vesica-store"},
+    "vesica-mcp": {"vesica-core", "vesica-report", "vesica-import", "vesica-resolve", "vesica-store"},
+    # The binary is the COMPOSITION ROOT. Its whole job is to construct the
+    # store, hand it to the API and MCP layers, and run CLI subcommands that
+    # act on it directly (`vesica migrate`, `backup`, `check`). Forcing those
+    # through vesica-api would be layering theatre: it would add a passthrough
+    # for no isolation, since the binary already links everything anyway.
+    # The layering rule that matters is that no LIBRARY crate may reach
+    # sideways or upwards, and that is still enforced above.
+    "vesica": {"vesica-core", "vesica-api", "vesica-mcp", "vesica-store"},
 }
 
 # Crates that perform I/O (network, filesystem, database, async runtime).

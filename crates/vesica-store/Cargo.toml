@@ -16,3 +16,7 @@ chrono.workspace = true
 ulid.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+# Normal (not dev-) dependency: backs `testing::test_store()`, the harness
+# other crates' tests call. See the note on this dependency in the root
+# Cargo.toml.
+tempfile.workspace = true

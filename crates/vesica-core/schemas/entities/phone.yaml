@@ -1,0 +1,11 @@
+id: Phone
+label: Phone number
+plural: Phone numbers
+extends: [Thing]
+icon: phone
+color: "#14b8a6"
+caption: "{number}"
+matchable: true
+properties:
+  - { name: number, type: phone, label: Phone number, required: true }
+  - { name: notes,  type: text,  label: Notes }

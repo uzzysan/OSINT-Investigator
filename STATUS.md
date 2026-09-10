@@ -5,6 +5,60 @@ resume without archaeology.
 
 ---
 
+## 2026-09-09 — M0 complete
+
+**Done** — all seven M0 tickets, built by subagents under orchestration, each
+verified independently before being committed.
+
+- 01 workspace · 02 config, logging, CLI · 03 store, migrations, single-writer
+  runtime · 04 health, readiness, embedded SPA · 05 CI and installer ·
+  06 property types and normalisation · 07 schema registry.
+- **160 tests pass.** `cargo fmt --check`, `cargo clippy -D warnings`,
+  `just check-deps` and `cargo deny check` are all clean; `gitleaks` finds
+  nothing, and was proven to work by planting a secret and watching it fail.
+- The service was run by hand: `/api/v1/health` returns 200 without touching the
+  database, `/api/v1/ready` returns 200 reporting migrations, database
+  writability and blob-directory writability separately, the embedded SPA serves
+  at `/`, a taken port produces a clear refusal instead of moving, and SIGTERM
+  drains and closes cleanly.
+- `deploy/install.sh` was executed for real (with `--no-service`, since the build
+  container has no systemd): it built the web assets and the release binary,
+  created the `vesica` system user and a 0750 data directory, ran migrations, and
+  the resulting binary answered health and ready.
+
+**Corrections to the design docs, all found by the implementation**
+
+- The dependency direction did not account for the binary being the composition
+  root, and omitted `vesica-core` from the api/mcp edges.
+- The Operations table listed `/health` and `/ready` without the `/api/v1` prefix
+  that section 6.1 and the architecture doc both require.
+- The traversal CTE in section 4.4 bounded its result but not its work, so a
+  cycle could run away regardless of the budget.
+- The systemd unit still said `User=osint`, missed by the Vesica rename.
+- The data model told both `iban` and `wallet` to uppercase; uppercasing a wallet
+  address destroys base58 and discards the EIP-55 checksum.
+
+**Known gaps carried forward**
+
+- The systemd path could not be exercised to a running service — the build
+  container has no systemd. Everything up to `systemctl daemon-reload` is
+  written and the "systemd present but not PID 1" guard fails cleanly.
+- The toolchain auto-install branches in `install.sh` are unexercised, since
+  Rust and Node were already present.
+- The database-writability readiness check has no negative test: an already-open
+  file descriptor does not re-check permissions on Unix.
+- `vesica-store` repositories are deliberately thin — no property read/write, no
+  blob or match repos, no shortest path or connected components yet.
+
+**Next action**
+
+M1 proper: ticket 08 (case lifecycle), then 09 (entities), 10 (relations),
+11 (sources), 12 (search), 13 (traversal), 14 (audit), 15 (custom schemas).
+Ticket 004 in the wayfinder map — the full schema catalogue — should be settled
+before 09 hardens the property contract.
+
+---
+
 ## 2026-09-08 (design) — Design system
 
 **Done**

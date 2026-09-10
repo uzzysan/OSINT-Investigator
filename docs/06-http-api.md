@@ -157,8 +157,8 @@ Graph responses always carry `{ "truncated": bool, "node_budget": n }`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Liveness |
-| `GET` | `/ready` | Migrations applied, DB and blob dir writable |
+| `GET` | `/api/v1/health` | Liveness |
+| `GET` | `/api/v1/ready` | Migrations applied, DB and blob dir writable |
 | `GET` | `/stats` | Counts, match-queue depth, resolver lag |
 | `GET` | `/events` | SSE stream of change events for live UI updates |
 | `GET` | `/audit` | Audit log, filterable by case/target/actor/batch |

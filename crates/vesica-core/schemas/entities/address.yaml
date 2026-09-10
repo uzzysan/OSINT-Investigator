@@ -1,0 +1,12 @@
+id: Address
+label: Address
+plural: Addresses
+extends: [Thing]
+icon: map-pin
+color: "#f97316"
+caption: "{line}"
+matchable: true
+properties:
+  - { name: line,    type: address, label: Address, required: true }
+  - { name: country, type: country, label: Country }
+  - { name: notes,   type: text,    label: Notes }

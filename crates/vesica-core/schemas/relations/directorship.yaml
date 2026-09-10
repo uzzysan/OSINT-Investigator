@@ -1,0 +1,10 @@
+id: Directorship
+label: Directorship
+source: { label: Director, schemas: [Person] }
+target: { label: Company, schemas: [Company] }
+directed: true
+interval: true
+color: "#0ea5e9"
+properties:
+  - { name: role,  type: text, label: Role }
+  - { name: title, type: text, label: Title }

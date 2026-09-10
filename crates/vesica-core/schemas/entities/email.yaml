@@ -1,0 +1,11 @@
+id: Email
+label: Email address
+plural: Email addresses
+extends: [Thing]
+icon: mail
+color: "#22c55e"
+caption: "{address}"
+matchable: true
+properties:
+  - { name: address, type: email, label: Email address, required: true }
+  - { name: notes,   type: text,  label: Notes }

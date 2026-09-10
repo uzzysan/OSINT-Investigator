@@ -78,11 +78,20 @@ deploy/             # install.sh, systemd unit, backup.sh, update.sh
 The dependency direction is strict and one-way:
 
 ```
-vesica → vesica-api, vesica-mcp
-vesica-api, vesica-mcp → vesica-report, vesica-import, vesica-resolve, vesica-store
+vesica → vesica-core, vesica-api, vesica-mcp, vesica-store   (composition root)
+vesica-api, vesica-mcp → vesica-core, vesica-report, vesica-import,
+                         vesica-resolve, vesica-store
 vesica-resolve, vesica-store, vesica-import, vesica-report → vesica-core
 vesica-core → nothing internal
 ```
+
+The binary is the composition root and is deliberately exempt from the layering
+rule: its job is to construct the store, hand it to the API and MCP layers, and
+run the CLI subcommands that act on the store directly (`migrate`, `backup`,
+`check`). Routing those through `vesica-api` would add a passthrough without
+adding isolation, since the binary links everything in any case. The rule that
+carries weight — no *library* crate reaches sideways or upwards — is unchanged,
+and `just check-deps` enforces it mechanically.
 
 `vesica-core` must stay I/O-free so the domain rules are testable without a
 database. **`vesica-resolve` is I/O-free for the same reason**: it owns blocking

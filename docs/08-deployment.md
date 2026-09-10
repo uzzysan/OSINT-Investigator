@@ -91,8 +91,8 @@ Wants=network-online.target
 
 [Service]
 Type=exec
-User=osint
-Group=osint
+User=vesica
+Group=vesica
 WorkingDirectory=/opt/vesica
 EnvironmentFile=/opt/vesica/.env
 ExecStart=/opt/vesica/bin/vesica serve

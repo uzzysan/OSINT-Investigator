@@ -12,6 +12,7 @@ description = "Pure domain layer: schema registry, property types, normalisation
 # 03-architecture.md section 3.3/3.4. Everything below is pure computation over
 # values already in memory; `just check-deps` is what catches a regression here.
 serde = { workspace = true }
+serde_yaml = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 unicode-normalization = { workspace = true }

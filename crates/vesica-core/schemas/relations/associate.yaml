@@ -1,0 +1,10 @@
+id: Associate
+label: Associate
+source: { label: Thing, schemas: [Thing] }
+target: { label: Thing, schemas: [Thing] }
+directed: false
+interval: false
+color: "#64748b"
+properties:
+  - { name: relationType, type: text, label: Relation type }
+  - { name: note,         type: text, label: Note }

@@ -1,0 +1,9 @@
+id: Registration
+label: Registration
+source: { label: Registrant, schemas: [LegalEntity, Person, Company] }
+target: { label: Registered, schemas: [Thing] }
+directed: true
+interval: true
+color: "#a855f7"
+properties:
+  - { name: role, type: text, label: Role }

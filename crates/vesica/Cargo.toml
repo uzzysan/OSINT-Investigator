@@ -13,6 +13,7 @@ path = "src/main.rs"
 [dependencies]
 vesica-api = { path = "../vesica-api" }
 vesica-mcp = { path = "../vesica-mcp" }
+vesica-store = { path = "../vesica-store" }
 
 tokio.workspace = true
 clap.workspace = true
