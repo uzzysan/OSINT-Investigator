@@ -104,6 +104,17 @@ never be a third.
 - If the next session wants to commit directly again, the device shell's mount
   has to be working. That is worth checking at the start of a session rather
   than discovering after a ticket is finished.
+- **`device_commit_files` silently fails to overwrite an existing file on this
+  machine.** It reports the path in `written`, and the file's mtime does move —
+  but the bytes on disk do not change. Confirmed twice, by reading the file back
+  and comparing sizes and checksums: a 45,234-byte bundle stayed 45,234 bytes
+  after a 87,055-byte one was "written" over it, and likewise for a markdown
+  file. Passing `force: true` makes no difference. Creating a *new* path works
+  correctly every time. This is worse than an outright error, because a session
+  that synced its work file-by-file would be told every write succeeded while
+  the folder kept the old contents. **Write to new paths and read back what you
+  wrote.** It is also, on its own, a sufficient reason not to sync a ticket as
+  loose files over existing ones from a cloud session.
 
 **Known gaps carried forward from these two tickets**
 
