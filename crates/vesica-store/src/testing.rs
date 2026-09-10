@@ -10,8 +10,8 @@
 //! ```no_run
 //! # async fn example() -> Result<(), vesica_store::StoreError> {
 //! let store = vesica_store::testing::test_store().await?;
-//! let repo = vesica_store::repo::SqliteCaseRepo::new(store.db.clone());
-//! // ... exercise `repo` against a real, freshly-migrated SQLite database ...
+//! let cases = vesica_store::repo::case::list(store.db.read_pool(), &Default::default()).await?;
+//! // ... exercise the store against a real, freshly-migrated SQLite database ...
 //! # Ok(())
 //! # }
 //! // `store` (and its temp directory) is dropped and cleaned up here.
@@ -29,6 +29,8 @@ use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
 use crate::error::StoreError;
+use crate::ids;
+use crate::repo::case::{self, CaseRow};
 use crate::store::Db;
 
 /// A store backed by a database in its own temporary directory. Dropping
@@ -65,6 +67,31 @@ pub async fn test_store() -> Result<TestStore, StoreError> {
     let db_path = dir.path().join("vesica.sqlite");
     let (db, _outcome) = Db::open(&db_path).await?;
     Ok(TestStore { db, dir })
+}
+
+/// Inserts a minimal live case and returns the row, for tests in this crate
+/// that need something for an entity, relation or source to hang off. It
+/// writes no audit entry, because it is not a use case — the service layer
+/// owns that, and a store-level test asserting foreign keys work does not
+/// want a service to exist first.
+pub async fn seed_case(db: &Db, slug: &str) -> Result<CaseRow, StoreError> {
+    let now = ids::now();
+    let row = CaseRow {
+        id: ids::new_id(),
+        slug: slug.to_string(),
+        name: slug.to_string(),
+        description: None,
+        color: None,
+        status: "active".to_string(),
+        default_region: None,
+        created_at: now.clone(),
+        updated_at: now,
+        deleted_at: None,
+    };
+    let stored = row.clone();
+    db.transaction(move |conn| Box::pin(async move { case::insert(conn, &stored).await }))
+        .await?;
+    Ok(row)
 }
 
 #[cfg(test)]

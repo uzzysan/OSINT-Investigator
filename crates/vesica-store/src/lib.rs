@@ -9,8 +9,10 @@
 //!   every connection. This is why there is no retry logic anywhere in this
 //!   crate: write/write lock contention is structurally impossible, not
 //!   merely unlikely.
-//! - [`repo`]: `CaseRepo`, `EntityRepo`, `RelationRepo`, `SourceRepo`,
-//!   `AuditRepo` and their SQLite implementations.
+//! - [`repo`]: persistence for each aggregate — `repo::case` and
+//!   `repo::audit` as transaction-scoped functions (so a change and its
+//!   audit entry commit together), `EntityRepo`, `RelationRepo` and
+//!   `SourceRepo` still as traits with one SQLite implementation each.
 //! - [`graph`]: the bounded neighbourhood-traversal recursive CTE.
 //! - [`testing`]: the shared harness later tickets use to stand up a real
 //!   store in a test.
@@ -29,7 +31,7 @@
 
 mod error;
 pub mod graph;
-mod ids;
+pub mod ids;
 pub mod migrate;
 pub mod repo;
 pub mod store;
@@ -37,6 +39,8 @@ pub mod testing;
 mod writer;
 
 pub use error::StoreError;
+pub use ids::{is_valid_id, new_id, now};
 pub use migrate::{EMBEDDED_MIGRATIONS, Migration, MigrationOutcome};
+pub use sqlx::SqliteConnection;
 pub use store::Db;
 pub use writer::BoxFuture;

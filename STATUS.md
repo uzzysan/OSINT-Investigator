@@ -5,6 +5,62 @@ resume without archaeology.
 
 ---
 
+## 2026-09-10 — Ticket 08 done; a latent ordering bug found and fixed
+
+**Done**
+
+- **Ticket 08 — case lifecycle.** The service layer (`vesica_api::services::Services`)
+  is established: one method per use case, taking and returning domain types, with
+  `vesica_api::testing::test_services()` as the fixture every later ticket's tests
+  use. Cases create/read/list/update, slugs stable across renames, default region,
+  archive, soft delete and restore, and a purge that is refused without explicit
+  confirmation. Every mutation writes its audit entry in the same transaction.
+- **Erasure by redaction.** A purge now strips the payloads from the purged case's
+  earlier audit rows, leaving the rows themselves — actor, action, timestamp —
+  intact, per the obligation in `docs/09-security-and-legal.md`. There is exactly
+  one update path against `audit_log`, documented as the sole exception to the
+  append-only rule. Scoped by `case_id` rather than `target_id`, so it already
+  covers the entities a purge cascades through.
+- **A real bug: ULIDs were not monotonic.** `Ulid::new()` puts a millisecond
+  timestamp in the high bits and *random* bits in the low 80, so ids minted in the
+  same millisecond sorted arbitrarily. Every list orders by
+  `created_at DESC, id DESC` and leans on `id` to break the tie — so under a burst
+  (an agent batch, an import) the sort was unstable, and an unstable sort under
+  pagination means a row can appear on two consecutive pages or on neither. Fixed
+  with `ulid::Generator`, which increments the previous random component within a
+  millisecond. A regression test mints 500 ids in a tight loop and asserts they are
+  strictly increasing.
+
+  Worth recording *how* this was found: the test that caught it had been passing.
+  It only failed when the workspace was rebuilt on a different machine, where the
+  timing differed. It would otherwise have shipped.
+
+**Verified**: 213 tests pass; `cargo fmt --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, `just check-deps` and `cargo deny check` all clean.
+
+**New**: `docs/AGENT-BRIEF.md` — the standing brief for implementation agents.
+It previously lived only in the orchestrating session and was lost when that
+session's container was reclaimed. It is now part of the repository.
+
+**Not done**
+
+- **Ticket 09 (entities, properties, tags) was started and lost.** The session's
+  cloud container was reclaimed mid-ticket. Nothing else was affected, because
+  each finished ticket had already been synced and committed here. Ticket 09 needs
+  starting from scratch.
+
+**Next action**
+
+M1, working the frontier: ticket 09 (entities), then 10 (relations), then
+{11 sources, 12 search, 13 traversal, 15 custom schemas} which are independent of
+each other, then 14 (audit history and integrity check).
+
+Wayfinder ticket 004 — the full built-in schema catalogue — is worth settling
+before or alongside 09, since 09 hardens the property contract. It is a data
+change, not a code change, so it does not hard-block.
+
+---
+
 ## 2026-09-09 — M0 complete
 
 **Done** — all seven M0 tickets, built by subagents under orchestration, each

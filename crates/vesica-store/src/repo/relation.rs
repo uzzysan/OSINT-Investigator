@@ -39,7 +39,8 @@ pub struct Relation {
 
 /// Persistence for relations. See the `repo` module docs for why this trait
 /// exists and why it has exactly one implementation.
-// See the comment on `CaseRepo`'s `#[allow(async_fn_in_trait)]` in case.rs.
+// See the comment on `EntityRepo`'s `#[allow(async_fn_in_trait)]` below;
+// the same reasoning applies to every repository trait in this module.
 #[allow(async_fn_in_trait)]
 pub trait RelationRepo: Send + Sync {
     /// Creates a new relation, generating its id and timestamps, and
@@ -122,26 +123,16 @@ impl RelationRepo for SqliteRelationRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::{CaseRepo, EntityRepo, NewCase, NewEntity, SqliteCaseRepo, SqliteEntityRepo};
-    use crate::testing::test_store;
+    use crate::repo::{EntityRepo, NewEntity, SqliteEntityRepo};
+    use crate::testing::{seed_case, test_store};
 
     #[tokio::test]
     async fn create_then_get_round_trips_and_references_its_endpoints() {
         let store = test_store().await.unwrap();
-        let cases = SqliteCaseRepo::new(store.db.clone());
         let entities = SqliteEntityRepo::new(store.db.clone());
         let relations = SqliteRelationRepo::new(store.db.clone());
 
-        let case = cases
-            .create(NewCase {
-                slug: "op-lighthouse".into(),
-                name: "Operation Lighthouse".into(),
-                description: None,
-                color: None,
-                default_region: None,
-            })
-            .await
-            .unwrap();
+        let case = seed_case(&store.db, "op-lighthouse").await.unwrap();
 
         let a = entities
             .create(NewEntity {
@@ -188,20 +179,10 @@ mod tests {
     #[tokio::test]
     async fn creating_a_relation_to_a_missing_entity_is_rejected() {
         let store = test_store().await.unwrap();
-        let cases = SqliteCaseRepo::new(store.db.clone());
         let entities = SqliteEntityRepo::new(store.db.clone());
         let relations = SqliteRelationRepo::new(store.db.clone());
 
-        let case = cases
-            .create(NewCase {
-                slug: "op-lighthouse".into(),
-                name: "Operation Lighthouse".into(),
-                description: None,
-                color: None,
-                default_region: None,
-            })
-            .await
-            .unwrap();
+        let case = seed_case(&store.db, "op-lighthouse").await.unwrap();
         let a = entities
             .create(NewEntity {
                 case_id: case.id.clone(),

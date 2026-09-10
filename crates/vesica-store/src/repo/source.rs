@@ -33,7 +33,8 @@ pub struct Source {
 
 /// Persistence for sources. See the `repo` module docs for why this trait
 /// exists and why it has exactly one implementation.
-// See the comment on `CaseRepo`'s `#[allow(async_fn_in_trait)]` in case.rs.
+// See the comment on `EntityRepo`'s `#[allow(async_fn_in_trait)]` below;
+// the same reasoning applies to every repository trait in this module.
 #[allow(async_fn_in_trait)]
 pub trait SourceRepo: Send + Sync {
     /// Creates a new source, generating its id and timestamp, and returns it
@@ -106,25 +107,15 @@ impl SourceRepo for SqliteSourceRepo {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo::{CaseRepo, NewCase, SqliteCaseRepo};
-    use crate::testing::test_store;
+
+    use crate::testing::{seed_case, test_store};
 
     #[tokio::test]
     async fn create_then_get_round_trips() {
         let store = test_store().await.unwrap();
-        let cases = SqliteCaseRepo::new(store.db.clone());
         let sources = SqliteSourceRepo::new(store.db.clone());
 
-        let case = cases
-            .create(NewCase {
-                slug: "op-lighthouse".into(),
-                name: "Operation Lighthouse".into(),
-                description: None,
-                color: None,
-                default_region: None,
-            })
-            .await
-            .unwrap();
+        let case = seed_case(&store.db, "op-lighthouse").await.unwrap();
 
         let created = sources
             .create(NewSource {

@@ -2806,6 +2806,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "vesica-core",
  "vesica-import",
  "vesica-report",
  "vesica-resolve",

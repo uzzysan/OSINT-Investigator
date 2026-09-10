@@ -6,7 +6,7 @@ the plan is wrong and gets fixed.
 
 - **Status**: M0 complete — the workspace builds, the service runs, the installer works
 - **Last updated**: 2026-09-08
-- **Current milestone**: M1 — Domain and storage (partly delivered early by tickets 03, 06 and 07)
+- **Current milestone**: M1 — Domain and storage. Tickets 03, 06, 07 and 08 done; 09 is next.
 
 ---
 
@@ -31,7 +31,7 @@ work approaches them. M0 and M1 are covered by
 | Milestone | Theme | Status | Exit condition |
 | --- | --- | --- | --- |
 | M0 | Foundations | `[x]` **done** | `cargo test` and `install.sh` both run green on an empty app |
-| M1 | Domain and storage | `[ ]` | Entities and relations round-trip through SQLite with full audit |
+| M1 | Domain and storage | `[~]` in progress | Entities and relations round-trip through SQLite with full audit |
 | M2 | API and MCP skeleton | `[ ]` | An agent creates a case and 20 entities through MCP alone |
 | M3 | Web UI and canvas | `[ ]` | A human builds a 50-entity case in the browser without docs |
 | M4 | Evidence and timeline | `[ ]` | A sourced, dated case renders a correct timeline |
@@ -85,12 +85,22 @@ installer runs end to end and the service answers `/api/v1/health` and
 - [x] FTS5 table and sync triggers
 - [~] Graph queries: neighbourhood CTE (bounded neighbours done; shortest path and components pending), shortest path, connected components,
       each with a depth limit, a node budget and a `truncated` flag
-- [ ] Audit log written on every mutation, with `batch_id` grouping
-- [ ] Soft delete, restore, purge
+- [x] Audit log written on every mutation, in the same transaction, with `batch_id` grouping
+- [x] Soft delete, restore, purge (purge redacts the target's earlier audit payloads — docs/09-security-and-legal.md)
 - [x] Property-based tests for normalisation; golden tests for the schema registry
 
 **Exit**: a test creates a case, 1,000 entities and 3,000 relations, queries
 neighbours at depth 3, and asserts the audit log is complete.
+
+---
+
+### M1 progress
+
+- [x] Ticket 08 — case lifecycle, the service layer, and the fixture later
+      tickets build their tests on
+- [ ] Ticket 09 — entities, properties and tags  ← **next**
+- [ ] Ticket 10 — relations · [ ] 11 sources · [ ] 12 search · [ ] 13 traversal
+      · [ ] 14 audit history · [ ] 15 custom schemas
 
 ---
 

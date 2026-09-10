@@ -1,0 +1,1001 @@
+//! The Case use cases: create, read, list, update, archive, soft delete,
+//! restore and purge — plus the audit trail every one of them writes.
+//!
+//! A Case is the container an investigation happens inside. Everything else
+//! in Vesica belongs to exactly one of them, which is what makes the
+//! boundary between two investigations unambiguous.
+//!
+//! # Deletion, in three strengths
+//!
+//! - **Archive** — the investigation concluded. The Case keeps all its data
+//!   and stays fully readable; it just stops appearing in the active list.
+//! - **Delete** — soft, reversible, and hidden from every read. A misclick
+//!   is not a catastrophe.
+//! - **Purge** — separate, explicitly confirmed, irreversible, and it really
+//!   does destroy the rows. "Mostly gone" is not an answer to "make this
+//!   gone".
+
+use serde::{Deserialize, Serialize};
+use vesica_core::{NormalizeContext, PropertyType};
+use vesica_store::repo::{CaseFilter, CaseRow, NewAuditEntry};
+use vesica_store::repo::{audit, case};
+
+use super::error::{Actor, ServiceError};
+use super::{Patch, Services, slug};
+
+/// What `audit_log.target_kind` says for a Case.
+const TARGET_CASE: &str = "case";
+
+/// Longest a Case name may be. A name is a label, not a description.
+const MAX_NAME_LEN: usize = 200;
+
+/// Longest a Case description may be. Long enough for a real statement of
+/// purpose; short enough that the case list stays a list.
+const MAX_DESCRIPTION_LEN: usize = 4_000;
+
+// ---------------------------------------------------------------------------
+// Domain types
+// ---------------------------------------------------------------------------
+
+/// Whether a Case is being worked on or has been put away.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaseStatus {
+    /// Under investigation; appears in the default list.
+    Active,
+    /// Concluded. Fully readable, excluded from the active list.
+    Archived,
+}
+
+impl CaseStatus {
+    /// The string stored in `kase.status`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CaseStatus::Active => "active",
+            CaseStatus::Archived => "archived",
+        }
+    }
+
+    fn parse(stored: &str) -> Result<Self, ServiceError> {
+        match stored {
+            "active" => Ok(CaseStatus::Active),
+            "archived" => Ok(CaseStatus::Archived),
+            other => Err(ServiceError::Inconsistent(format!(
+                "kase.status holds `{other}`, which is neither `active` nor `archived`"
+            ))),
+        }
+    }
+}
+
+/// A Case as the rest of the system sees it. Soft-deleted Cases never
+/// become one of these: if you are holding a `Case`, it is visible.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Case {
+    /// ULID, 26 characters.
+    pub id: String,
+    /// Stable, unique, human-readable handle. Derived from the name at
+    /// creation and never changed by a rename.
+    pub slug: String,
+    pub name: String,
+    pub description: Option<String>,
+    /// A hex colour (`#rrggbb`) for the UI, if one was chosen.
+    pub color: Option<String>,
+    pub status: CaseStatus,
+    /// ISO-3166-1 alpha-2, if set. See [`Case::normalize_context`].
+    pub default_region: Option<String>,
+    /// ISO-8601 UTC.
+    pub created_at: String,
+    /// ISO-8601 UTC.
+    pub updated_at: String,
+}
+
+impl Case {
+    /// The normalisation context for values recorded inside this Case.
+    ///
+    /// This is what the default region is *for*: a phone number typed as
+    /// `601 234 567` inside a Polish Case has to become `+48601234567`, and
+    /// `12/04/1978` has to be read day-first or month-first depending on
+    /// where the Case is. Entity and Property use cases pass this to
+    /// [`vesica_core::PropertyType::normalize`]; it exists here so that the
+    /// region is retrieved from the Case and never guessed.
+    pub fn normalize_context(&self) -> NormalizeContext {
+        match &self.default_region {
+            Some(region) => NormalizeContext::with_region(region),
+            None => NormalizeContext::new(),
+        }
+    }
+
+    fn from_row(row: CaseRow) -> Result<Case, ServiceError> {
+        Ok(Case {
+            status: CaseStatus::parse(&row.status)?,
+            id: row.id,
+            slug: row.slug,
+            name: row.name,
+            description: row.description,
+            color: row.color,
+            default_region: row.default_region,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        })
+    }
+}
+
+/// Everything needed to open a new Case.
+#[derive(Debug, Clone, Default)]
+pub struct CreateCase {
+    /// The id to give it. `None` generates one. A caller supplying its own
+    /// ULID gets an idempotency handle: creating the same id twice is a
+    /// conflict rather than two Cases (AGENT-BRIEF.md, "Style": ids are
+    /// "generated by the caller where the API allows").
+    pub id: Option<String>,
+    /// What the investigation is called. The slug is derived from this.
+    pub name: String,
+    /// What the investigation is for.
+    pub description: Option<String>,
+    /// A `#rrggbb` colour for the UI.
+    pub color: Option<String>,
+    /// ISO-3166-1 alpha-2, or anything
+    /// [`vesica_core::PropertyType::Country`] recognises (`Poland`, `POL`,
+    /// `616` all become `PL`). Falls back to
+    /// [`super::ServiceConfig::default_region`] when absent.
+    pub default_region: Option<String>,
+}
+
+/// A partial change to a Case. Absent fields are left alone; see
+/// [`Patch`] for why the nullable ones are not `Option`.
+///
+/// The slug is deliberately not here. It is derived once and stays put.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateCase {
+    /// `None` leaves the name alone. Renaming does **not** change the slug.
+    pub name: Option<String>,
+    pub description: Patch<String>,
+    pub color: Patch<String>,
+    /// Set or clear the region used to normalise local phone numbers and
+    /// ambiguous dates recorded in this Case from now on.
+    pub default_region: Patch<String>,
+}
+
+/// Which Cases [`Services::list_cases`] returns. Soft-deleted Cases are
+/// never included, whatever is asked for.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum CaseStatusFilter {
+    /// Cases being worked on. The default: archiving is what stops
+    /// concluded work cluttering the list.
+    #[default]
+    Active,
+    /// Concluded Cases only.
+    Archived,
+    /// Both.
+    All,
+}
+
+impl CaseStatusFilter {
+    fn stored(self) -> Option<String> {
+        match self {
+            CaseStatusFilter::Active => Some(CaseStatus::Active.as_str().to_string()),
+            CaseStatusFilter::Archived => Some(CaseStatus::Archived.as_str().to_string()),
+            CaseStatusFilter::All => None,
+        }
+    }
+}
+
+/// A page of the Case list.
+#[derive(Debug, Clone, Default)]
+pub struct CaseQuery {
+    pub status: CaseStatusFilter,
+    /// Row budget. `None` uses [`super::ServiceConfig::max_page_size`];
+    /// anything larger is clamped to it.
+    pub limit: Option<usize>,
+    /// Rows to skip.
+    pub offset: usize,
+}
+
+/// The result of [`Services::list_cases`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CaseList {
+    pub cases: Vec<Case>,
+    /// Whether there were more rows than the budget allowed. AGENT-BRIEF.md
+    /// rule 5: a bounded list says whether it was cut short, so a caller
+    /// never mistakes a page for the whole truth.
+    pub truncated: bool,
+    /// The budget actually applied, after clamping.
+    pub limit: usize,
+    pub offset: usize,
+}
+
+/// A request to destroy a Case and everything in it.
+#[derive(Debug, Clone)]
+pub struct PurgeCase {
+    /// The Case to destroy.
+    pub case_id: String,
+    /// Must be `true`. This exists so that purging cannot happen by
+    /// accident, by omission, or by a transport defaulting a missing field
+    /// to something convenient.
+    pub confirm: bool,
+}
+
+/// What happened to something, for the audit trail.
+///
+/// `04-data-model.md` lists `create|update|delete|merge|link|import` beside
+/// the column as illustration; the lifecycle verbs below are added because
+/// "this Case was archived" and "this Case was renamed" are different
+/// questions to ask the trail, and collapsing both to `update` makes the
+/// trail answer neither without parsing JSON.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuditAction {
+    Create,
+    Update,
+    Archive,
+    Unarchive,
+    Delete,
+    Restore,
+    Purge,
+}
+
+impl AuditAction {
+    /// The string stored in `audit_log.action`.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AuditAction::Create => "create",
+            AuditAction::Update => "update",
+            AuditAction::Archive => "archive",
+            AuditAction::Unarchive => "unarchive",
+            AuditAction::Delete => "delete",
+            AuditAction::Restore => "restore",
+            AuditAction::Purge => "purge",
+        }
+    }
+
+    fn parse(stored: &str) -> Result<Self, ServiceError> {
+        match stored {
+            "create" => Ok(AuditAction::Create),
+            "update" => Ok(AuditAction::Update),
+            "archive" => Ok(AuditAction::Archive),
+            "unarchive" => Ok(AuditAction::Unarchive),
+            "delete" => Ok(AuditAction::Delete),
+            "restore" => Ok(AuditAction::Restore),
+            "purge" => Ok(AuditAction::Purge),
+            other => Err(ServiceError::Inconsistent(format!(
+                "audit_log.action holds `{other}`, which no service method writes"
+            ))),
+        }
+    }
+}
+
+/// One entry in the append-only audit trail.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuditRecord {
+    pub id: i64,
+    /// ISO-8601 UTC.
+    pub at: String,
+    /// Who did it — the analyst, or a named agent.
+    pub actor: String,
+    pub action: AuditAction,
+    pub case_id: Option<String>,
+    pub target_kind: String,
+    pub target_id: String,
+    /// The target's state before the change, where there was one.
+    pub before: Option<serde_json::Value>,
+    /// The target's state after the change, where there is one.
+    pub after: Option<serde_json::Value>,
+    /// Groups related changes (an import, a merge) for undo.
+    pub batch_id: Option<String>,
+}
+
+impl AuditRecord {
+    /// Whether this entry's payload was erased by a purge, as opposed to
+    /// never having had one. The entry itself is still true and complete
+    /// about what happened, when and at whose hand; only the copy of the
+    /// purged data is gone. See [`redaction_marker`].
+    pub fn payload_was_redacted(&self) -> bool {
+        [self.before.as_ref(), self.after.as_ref()]
+            .into_iter()
+            .flatten()
+            .any(|value| value.get(REDACTED_FIELD).is_some())
+    }
+
+    fn from_row(row: audit::AuditEntry) -> Result<AuditRecord, ServiceError> {
+        Ok(AuditRecord {
+            id: row.id,
+            at: row.at,
+            actor: row.actor,
+            action: AuditAction::parse(&row.action)?,
+            case_id: row.case_id,
+            target_kind: row.target_kind,
+            target_id: row.target_id,
+            before: parse_json(row.before),
+            after: parse_json(row.after),
+            batch_id: row.batch_id,
+        })
+    }
+}
+
+/// A page of the audit trail.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AuditPage {
+    /// Newest first.
+    pub entries: Vec<AuditRecord>,
+    /// Whether there were more entries than the budget allowed.
+    pub truncated: bool,
+}
+
+fn parse_json(stored: Option<String>) -> Option<serde_json::Value> {
+    stored.and_then(|s| serde_json::from_str(&s).ok())
+}
+
+/// The field name inside a redaction marker. Present in an audit entry's
+/// `before`/`after` if and only if that payload was erased by a purge.
+pub const REDACTED_FIELD: &str = "redacted";
+
+/// The value of [`REDACTED_FIELD`]: what erased the payload. There is one
+/// reason today; naming it rather than writing `true` means a later
+/// obligation with different rules can be told apart from this one after the
+/// fact, which is exactly the sort of thing an auditor asks about.
+pub const REDACTED_BY_PURGE: &str = "purge";
+
+/// The value written over an audit entry's `before`/`after` when the data it
+/// described has been purged: a marker saying the payload was erased and
+/// when, rather than a null.
+///
+/// The distinction matters to whoever reads the trail afterwards. A null
+/// means "nothing was ever recorded here"; this means "something was
+/// recorded here and it was erased on this date, under the erasure
+/// obligation". Losing that difference would make the trail quietly
+/// misleading in exactly the situation where it is being read most closely.
+pub fn redaction_marker(at: &str) -> String {
+    serde_json::json!({ REDACTED_FIELD: REDACTED_BY_PURGE, "at": at }).to_string()
+}
+
+/// Renders a Case for an audit entry's `before`/`after`.
+///
+/// Serialising a struct of strings cannot fail in practice; if it somehow
+/// did, an audit entry with a null snapshot is still worth far more than a
+/// refused mutation, so this degrades rather than propagates.
+fn snapshot(case: &Case) -> Option<String> {
+    serde_json::to_string(case).ok()
+}
+
+// ---------------------------------------------------------------------------
+// Use cases
+// ---------------------------------------------------------------------------
+
+impl Services {
+    /// Opens a new Case.
+    ///
+    /// The slug is derived from the name and made unique inside the same
+    /// transaction as the insert, so two callers naming their Cases the
+    /// same thing at the same moment get `…` and `…-2` rather than one of
+    /// them getting a constraint violation.
+    pub async fn create_case(
+        &self,
+        request: CreateCase,
+        actor: &Actor,
+    ) -> Result<Case, ServiceError> {
+        let name = validate_name(&request.name)?;
+        let description = validate_description(request.description.as_deref())?;
+        let color = validate_color(request.color.as_deref())?;
+        let default_region = match request.default_region.as_deref() {
+            Some(region) => Some(validate_region(region)?),
+            None => match self.config().default_region.as_deref() {
+                Some(region) => Some(validate_region(region)?),
+                None => None,
+            },
+        };
+        let id = match request.id {
+            Some(id) => validate_id(&id)?,
+            None => vesica_store::new_id(),
+        };
+
+        let base = slug::slugify(&name);
+        let now = vesica_store::now();
+        let actor = actor.as_str().to_string();
+
+        let row = self
+            .tx(move |conn| {
+                Box::pin(async move {
+                    let row = CaseRow {
+                        slug: slug::allocate(conn, &base).await?,
+                        id,
+                        name,
+                        description,
+                        color,
+                        status: CaseStatus::Active.as_str().to_string(),
+                        default_region,
+                        created_at: now.clone(),
+                        updated_at: now,
+                        deleted_at: None,
+                    };
+                    let case = Case::from_row(row.clone())?;
+
+                    // Audit first, change second. If the change fails —
+                    // a duplicate id, a constraint, a disk error — the
+                    // whole transaction goes, audit entry included. Were
+                    // these two separate transactions, this ordering would
+                    // leave a permanent record of a Case that does not
+                    // exist, which is precisely what the ordering plus the
+                    // shared transaction makes impossible to observe.
+                    audit::record(
+                        conn,
+                        entry(&actor, AuditAction::Create, &case.id, None, snapshot(&case)),
+                    )
+                    .await?;
+                    case::insert(conn, &row)
+                        .await
+                        .map_err(|e| duplicate_id_conflict(&row.id, e))?;
+                    Ok(row)
+                })
+            })
+            .await?;
+
+        Case::from_row(row)
+    }
+
+    /// The Case with this id. [`ServiceError::NotFound`] if there is none or
+    /// it has been deleted.
+    pub async fn get_case(&self, id: &str) -> Result<Case, ServiceError> {
+        let row = case::find(self.db().read_pool(), id)
+            .await?
+            .filter(|row| row.deleted_at.is_none())
+            .ok_or_else(|| ServiceError::not_found(TARGET_CASE, id))?;
+        Case::from_row(row)
+    }
+
+    /// The Case with this slug — the lookup an agent or a URL does.
+    /// [`ServiceError::NotFound`] if there is none or it has been deleted.
+    pub async fn get_case_by_slug(&self, slug: &str) -> Result<Case, ServiceError> {
+        let row = case::find_by_slug(self.db().read_pool(), slug)
+            .await?
+            .filter(|row| row.deleted_at.is_none())
+            .ok_or_else(|| ServiceError::not_found(TARGET_CASE, slug))?;
+        Case::from_row(row)
+    }
+
+    /// A bounded page of Cases, newest first. Deleted Cases are never
+    /// included; archived ones are included only if asked for.
+    pub async fn list_cases(&self, query: CaseQuery) -> Result<CaseList, ServiceError> {
+        let limit = self.page_size(query.limit);
+        // One more than the budget, to learn whether there was more without
+        // a second count query.
+        let filter = CaseFilter {
+            status: query.status.stored(),
+            limit: (limit as i64).saturating_add(1),
+            offset: query.offset as i64,
+        };
+        let mut rows = case::list(self.db().read_pool(), &filter).await?;
+        let truncated = rows.len() > limit;
+        rows.truncate(limit);
+
+        Ok(CaseList {
+            cases: rows
+                .into_iter()
+                .map(Case::from_row)
+                .collect::<Result<Vec<_>, _>>()?,
+            truncated,
+            limit,
+            offset: query.offset,
+        })
+    }
+
+    /// Changes a Case's name, description, colour or default region.
+    ///
+    /// The slug is not among them: it was derived from the name once, and a
+    /// rename leaves it exactly as it was.
+    pub async fn update_case(
+        &self,
+        id: &str,
+        request: UpdateCase,
+        actor: &Actor,
+    ) -> Result<Case, ServiceError> {
+        let name = match request.name.as_deref() {
+            Some(name) => Some(validate_name(name)?),
+            None => None,
+        };
+        let description = match request.description.resolve() {
+            Some(value) => Some(validate_description(value.as_deref())?),
+            None => None,
+        };
+        let color = match request.color.resolve() {
+            Some(value) => Some(validate_color(value.as_deref())?),
+            None => None,
+        };
+        let default_region = match request.default_region.resolve() {
+            Some(Some(region)) => Some(Some(validate_region(&region)?)),
+            Some(None) => Some(None),
+            None => None,
+        };
+
+        let id = id.to_string();
+        let now = vesica_store::now();
+        let actor = actor.as_str().to_string();
+
+        let row = self
+            .tx(move |conn| {
+                Box::pin(async move {
+                    let before = live_case(conn, &id).await?;
+                    let mut row = CaseRow::from(&before);
+
+                    if let Some(name) = name {
+                        row.name = name;
+                    }
+                    if let Some(description) = description {
+                        row.description = description;
+                    }
+                    if let Some(color) = color {
+                        row.color = color;
+                    }
+                    if let Some(region) = default_region {
+                        row.default_region = region;
+                    }
+                    row.updated_at = now;
+
+                    let after = Case::from_row(row.clone())?;
+                    audit::record(
+                        conn,
+                        entry(
+                            &actor,
+                            AuditAction::Update,
+                            &row.id,
+                            snapshot(&before),
+                            snapshot(&after),
+                        ),
+                    )
+                    .await?;
+                    case::save(conn, &row).await?;
+                    Ok(row)
+                })
+            })
+            .await?;
+
+        Case::from_row(row)
+    }
+
+    /// Concludes a Case: it keeps everything it has and stops appearing in
+    /// the active list. Archiving an already-archived Case changes nothing
+    /// and records nothing.
+    pub async fn archive_case(&self, id: &str, actor: &Actor) -> Result<Case, ServiceError> {
+        self.set_status(id, CaseStatus::Archived, AuditAction::Archive, actor)
+            .await
+    }
+
+    /// Reopens an archived Case. The counterpart to
+    /// [`Services::archive_case`]; a Case that could only ever be archived
+    /// would make archiving as frightening as deleting, which is the
+    /// opposite of the point.
+    pub async fn unarchive_case(&self, id: &str, actor: &Actor) -> Result<Case, ServiceError> {
+        self.set_status(id, CaseStatus::Active, AuditAction::Unarchive, actor)
+            .await
+    }
+
+    async fn set_status(
+        &self,
+        id: &str,
+        status: CaseStatus,
+        action: AuditAction,
+        actor: &Actor,
+    ) -> Result<Case, ServiceError> {
+        let id = id.to_string();
+        let now = vesica_store::now();
+        let actor = actor.as_str().to_string();
+
+        let row = self
+            .tx(move |conn| {
+                Box::pin(async move {
+                    let before = live_case(conn, &id).await?;
+                    if before.status == status {
+                        return Ok(CaseRow::from(&before));
+                    }
+                    let mut row = CaseRow::from(&before);
+                    row.status = status.as_str().to_string();
+                    row.updated_at = now;
+
+                    let after = Case::from_row(row.clone())?;
+                    audit::record(
+                        conn,
+                        entry(&actor, action, &row.id, snapshot(&before), snapshot(&after)),
+                    )
+                    .await?;
+                    case::save(conn, &row).await?;
+                    Ok(row)
+                })
+            })
+            .await?;
+
+        Case::from_row(row)
+    }
+
+    /// Deletes a Case, reversibly. It disappears from every read — by id,
+    /// by slug and from every list — and [`Services::restore_case`] brings
+    /// it back exactly as it was, slug included.
+    ///
+    /// Deleting an already-deleted Case changes nothing and records
+    /// nothing; deleting one that never existed is
+    /// [`ServiceError::NotFound`].
+    pub async fn delete_case(&self, id: &str, actor: &Actor) -> Result<(), ServiceError> {
+        let id = id.to_string();
+        let now = vesica_store::now();
+        let actor = actor.as_str().to_string();
+
+        self.tx(move |conn| {
+            Box::pin(async move {
+                let row = case::find(&mut *conn, &id)
+                    .await?
+                    .ok_or_else(|| ServiceError::not_found(TARGET_CASE, &id))?;
+                if row.deleted_at.is_some() {
+                    return Ok(());
+                }
+                let before = Case::from_row(row.clone())?;
+
+                let mut deleted = row;
+                deleted.deleted_at = Some(now.clone());
+                deleted.updated_at = now;
+
+                audit::record(
+                    conn,
+                    entry(
+                        &actor,
+                        AuditAction::Delete,
+                        &deleted.id,
+                        snapshot(&before),
+                        None,
+                    ),
+                )
+                .await?;
+                case::save(conn, &deleted).await?;
+                Ok(())
+            })
+        })
+        .await
+    }
+
+    /// Brings a soft-deleted Case back. Restoring one that is not deleted
+    /// changes nothing and records nothing.
+    pub async fn restore_case(&self, id: &str, actor: &Actor) -> Result<Case, ServiceError> {
+        let id = id.to_string();
+        let now = vesica_store::now();
+        let actor = actor.as_str().to_string();
+
+        let row = self
+            .tx(move |conn| {
+                Box::pin(async move {
+                    let row = case::find(&mut *conn, &id)
+                        .await?
+                        .ok_or_else(|| ServiceError::not_found(TARGET_CASE, &id))?;
+                    if row.deleted_at.is_none() {
+                        return Ok(row);
+                    }
+
+                    let mut restored = row;
+                    restored.deleted_at = None;
+                    restored.updated_at = now;
+
+                    let after = Case::from_row(restored.clone())?;
+                    audit::record(
+                        conn,
+                        entry(
+                            &actor,
+                            AuditAction::Restore,
+                            &restored.id,
+                            None,
+                            snapshot(&after),
+                        ),
+                    )
+                    .await?;
+                    case::save(conn, &restored).await?;
+                    Ok(restored)
+                })
+            })
+            .await?;
+
+        Case::from_row(row)
+    }
+
+    /// Destroys a Case and, by cascade, every Entity, Relation, Source, tag
+    /// and saved view inside it. Irreversible.
+    ///
+    /// Refused unless [`PurgeCase::confirm`] is set: this is the one
+    /// operation in the Case lifecycle with no undo, so it is a separate
+    /// method from [`Services::delete_case`] and it asks.
+    ///
+    /// A Case need not be deleted first — an analyst who knows the data
+    /// must go should not have to perform a two-step ritual to get there —
+    /// but a purged Case is gone whether it was live, archived or deleted.
+    ///
+    /// # What the audit trail keeps
+    ///
+    /// `09-security-and-legal.md` settles this: a purge leaves "the audit
+    /// log retaining only the fact that a deletion occurred". So a purge
+    /// does two things to the trail, both inside the same transaction as the
+    /// deletion:
+    ///
+    /// - its own entry records who purged what and when, carrying **no
+    ///   snapshot** of what was destroyed; and
+    /// - every earlier entry for this Case keeps its id, timestamp, actor,
+    ///   action, target and batch, and has its `before`/`after` payload
+    ///   replaced by [`redaction_marker`] — because those payloads are
+    ///   copies of exactly the data the purge was asked to erase.
+    ///
+    /// The marker rather than a null is the point: a reader can tell "this
+    /// was erased, on this date" from "nothing was ever recorded here". The
+    /// history of what happened is untouched; only the personal data inside
+    /// it goes. See [`vesica_store::repo::audit::redact_case_payloads`],
+    /// which is the only code in Vesica that may alter an audit entry.
+    pub async fn purge_case(&self, request: PurgeCase, actor: &Actor) -> Result<(), ServiceError> {
+        if !request.confirm {
+            return Err(ServiceError::ConfirmationRequired {
+                operation: "purging a case",
+                fix: "re-send the request with `confirm` set to true; \
+                      to remove a case reversibly instead, delete it"
+                    .to_string(),
+            });
+        }
+
+        let id = request.case_id;
+        let actor = actor.as_str().to_string();
+        let marker = redaction_marker(&vesica_store::now());
+
+        self.tx(move |conn| {
+            Box::pin(async move {
+                if case::find(&mut *conn, &id).await?.is_none() {
+                    return Err(ServiceError::not_found(TARGET_CASE, &id));
+                }
+                // Recorded before the redaction so that the purge's own
+                // entry — which has no payload — is not itself a candidate
+                // for it, and reads naturally as the last thing that
+                // happened to this case.
+                audit::record(conn, entry(&actor, AuditAction::Purge, &id, None, None)).await?;
+                audit::redact_case_payloads(&mut *conn, &id, &marker).await?;
+                case::purge(conn, &id).await?;
+                Ok(())
+            })
+        })
+        .await
+    }
+
+    /// The audit trail for one Case: every change to the Case itself and,
+    /// once later tickets add them, to everything inside it. Newest first,
+    /// bounded.
+    ///
+    /// This deliberately does not require the Case to be visible. The trail
+    /// is a separate, append-only record whose purpose is to outlive what it
+    /// describes — refusing to show the trail of a deleted or purged Case
+    /// would make "prove the deletion was recorded" unanswerable. An unknown
+    /// id yields an empty page rather than an error.
+    pub async fn case_audit(
+        &self,
+        id: &str,
+        limit: Option<usize>,
+    ) -> Result<AuditPage, ServiceError> {
+        let limit = self.page_size(limit);
+        let mut rows =
+            audit::list_for_case(self.db().read_pool(), id, (limit as i64).saturating_add(1))
+                .await?;
+        let truncated = rows.len() > limit;
+        rows.truncate(limit);
+
+        Ok(AuditPage {
+            entries: rows
+                .into_iter()
+                .map(AuditRecord::from_row)
+                .collect::<Result<Vec<_>, _>>()?,
+            truncated,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+impl From<&Case> for CaseRow {
+    /// Back to a row, for the columns a Case owns. `deleted_at` is always
+    /// `None` because a [`Case`] only exists for a visible Case; the two
+    /// methods that write a non-null `deleted_at` build their row from the
+    /// stored one instead.
+    fn from(case: &Case) -> CaseRow {
+        CaseRow {
+            id: case.id.clone(),
+            slug: case.slug.clone(),
+            name: case.name.clone(),
+            description: case.description.clone(),
+            color: case.color.clone(),
+            status: case.status.as_str().to_string(),
+            default_region: case.default_region.clone(),
+            created_at: case.created_at.clone(),
+            updated_at: case.updated_at.clone(),
+            deleted_at: None,
+        }
+    }
+}
+
+/// Reads a Case that must be visible, inside the caller's transaction, so
+/// that a read-modify-write sees the same row it is about to overwrite.
+async fn live_case(
+    conn: &mut vesica_store::SqliteConnection,
+    id: &str,
+) -> Result<Case, ServiceError> {
+    let row = case::find(&mut *conn, id)
+        .await?
+        .filter(|row| row.deleted_at.is_none())
+        .ok_or_else(|| ServiceError::not_found(TARGET_CASE, id))?;
+    Case::from_row(row)
+}
+
+fn entry(
+    actor: &str,
+    action: AuditAction,
+    case_id: &str,
+    before: Option<String>,
+    after: Option<String>,
+) -> NewAuditEntry {
+    NewAuditEntry {
+        actor: actor.to_string(),
+        action: action.as_str().to_string(),
+        case_id: Some(case_id.to_string()),
+        target_kind: TARGET_CASE.to_string(),
+        target_id: case_id.to_string(),
+        before,
+        after,
+        batch_id: None,
+    }
+}
+
+/// Turns the primary-key violation a caller-supplied duplicate id causes
+/// into something that names the problem, and leaves every other store
+/// error alone.
+fn duplicate_id_conflict(id: &str, e: vesica_store::StoreError) -> ServiceError {
+    let message = e.to_string();
+    if message.contains("UNIQUE constraint failed") {
+        ServiceError::Conflict {
+            message: format!("`{id}` is already taken by another case"),
+            fix: "omit the id and one will be generated, or supply an id that is not in use"
+                .to_string(),
+        }
+    } else {
+        ServiceError::Store(e)
+    }
+}
+
+fn validate_id(id: &str) -> Result<String, ServiceError> {
+    let trimmed = id.trim();
+    if vesica_store::is_valid_id(trimmed) {
+        Ok(trimmed.to_string())
+    } else {
+        Err(ServiceError::validation(
+            "id",
+            format!("`{trimmed}` is not a ULID"),
+            "supply a 26-character Crockford-base32 ULID, or omit the field \
+             and one will be generated",
+        ))
+    }
+}
+
+fn validate_name(name: &str) -> Result<String, ServiceError> {
+    let trimmed = vesica_core::folding::collapse_whitespace(name);
+    if trimmed.is_empty() {
+        return Err(ServiceError::validation(
+            "name",
+            "a case needs a name",
+            "send a short name for the investigation, e.g. `Operation Lighthouse`",
+        ));
+    }
+    if trimmed.chars().count() > MAX_NAME_LEN {
+        return Err(ServiceError::validation(
+            "name",
+            format!("a case name may be at most {MAX_NAME_LEN} characters"),
+            format!(
+                "shorten the name to {MAX_NAME_LEN} characters or fewer and put the \
+                 detail in the description"
+            ),
+        ));
+    }
+    Ok(trimmed)
+}
+
+fn validate_description(description: Option<&str>) -> Result<Option<String>, ServiceError> {
+    let Some(description) = description else {
+        return Ok(None);
+    };
+    let trimmed = description.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.chars().count() > MAX_DESCRIPTION_LEN {
+        return Err(ServiceError::validation(
+            "description",
+            format!("a case description may be at most {MAX_DESCRIPTION_LEN} characters"),
+            format!("shorten the description to {MAX_DESCRIPTION_LEN} characters or fewer"),
+        ));
+    }
+    Ok(Some(trimmed.to_string()))
+}
+
+fn validate_color(color: Option<&str>) -> Result<Option<String>, ServiceError> {
+    let Some(color) = color else {
+        return Ok(None);
+    };
+    let trimmed = color.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    let is_hex = trimmed.len() == 7
+        && trimmed.starts_with('#')
+        && trimmed[1..].chars().all(|c| c.is_ascii_hexdigit());
+    if !is_hex {
+        return Err(ServiceError::validation(
+            "color",
+            format!("`{trimmed}` is not a hex colour"),
+            "send a colour as `#rrggbb`, e.g. `#3b82f6`",
+        ));
+    }
+    Ok(Some(trimmed.to_ascii_lowercase()))
+}
+
+/// Validates a default region through the value layer's `country` type, so
+/// that a Case's region and a Country property mean the same thing and
+/// accept the same spellings (`PL`, `POL`, `616`, `Poland` → `PL`).
+fn validate_region(region: &str) -> Result<String, ServiceError> {
+    let normalized = PropertyType::Country
+        .normalize(region, &NormalizeContext::new())
+        .map_err(|e| ServiceError::from_core("default_region", e))?;
+    Ok(normalized.value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_status_the_code_does_not_know_is_reported_as_inconsistent_storage() {
+        assert!(matches!(
+            CaseStatus::parse("something-else"),
+            Err(ServiceError::Inconsistent(_))
+        ));
+        assert!(matches!(
+            AuditAction::parse("something-else"),
+            Err(ServiceError::Inconsistent(_))
+        ));
+    }
+
+    #[test]
+    fn names_are_collapsed_and_bounded() {
+        assert_eq!(
+            validate_name("  Operation   Lighthouse ").unwrap(),
+            "Operation Lighthouse"
+        );
+        assert!(validate_name("   ").is_err());
+        assert!(validate_name(&"x".repeat(MAX_NAME_LEN + 1)).is_err());
+    }
+
+    #[test]
+    fn colours_are_hex_or_refused_with_a_fix() {
+        assert_eq!(
+            validate_color(Some("#3B82F6")).unwrap().as_deref(),
+            Some("#3b82f6")
+        );
+        assert_eq!(validate_color(Some("  ")).unwrap(), None);
+        assert_eq!(validate_color(None).unwrap(), None);
+        let e = validate_color(Some("blue")).unwrap_err();
+        assert!(e.fix().unwrap().contains("#rrggbb"));
+    }
+
+    #[test]
+    fn regions_accept_what_the_value_layer_accepts_and_store_alpha2() {
+        for spelling in ["PL", "pl", "POL", "Poland", "616"] {
+            assert_eq!(validate_region(spelling).unwrap(), "PL");
+        }
+        let e = validate_region("Atlantis").unwrap_err();
+        assert!(
+            e.fix().is_some(),
+            "an agent must be told what to send instead"
+        );
+    }
+
+    #[test]
+    fn a_supplied_id_must_be_a_ulid() {
+        let id = vesica_store::new_id();
+        assert_eq!(validate_id(&id).unwrap(), id);
+        assert!(validate_id("case-1").is_err());
+    }
+}

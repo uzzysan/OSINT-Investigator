@@ -91,6 +91,64 @@ impl Db {
         self.writer.write(f).await
     }
 
+    /// Runs `f` inside one SQLite transaction on the write connection,
+    /// committing when it returns `Ok` and rolling back when it returns
+    /// `Err`.
+    ///
+    /// This is the crate's atomicity primitive and the reason the `case`
+    /// and `audit` modules expose functions rather than `&self` methods: a
+    /// change and the `audit_log` row describing it have to commit together
+    /// or not at all, and only a transaction the *caller* owns can span
+    /// both. Everything `f` does — including reads, so a read-modify-write
+    /// sees a consistent snapshot — must go through the connection it is
+    /// handed, not through [`Db::read_pool`].
+    ///
+    /// Nothing retries: the transaction runs on the single writer
+    /// connection, so there is no other writer to contend with.
+    ///
+    /// `f` may fail with any error that a [`StoreError`] converts into, not
+    /// only `StoreError` itself, so that a caller whose transaction contains
+    /// business rules as well as SQL — the service layer's whole job — can
+    /// abort it with its own error type and have the rollback happen anyway.
+    pub async fn transaction<F, T, E>(&self, f: F) -> Result<T, E>
+    where
+        F: for<'c> FnOnce(&'c mut SqliteConnection) -> crate::BoxFuture<'c, Result<T, E>>
+            + Send
+            + 'static,
+        T: Send + 'static,
+        E: From<StoreError> + Send + 'static,
+    {
+        // The inner `Result` is the caller's outcome and the outer one is
+        // this crate's: `BEGIN`, `COMMIT` and the writer task itself can
+        // fail on their own account, and those failures are `StoreError`
+        // however the caller's error type is spelled.
+        let outcome = self
+            .write(move |conn| {
+                Box::pin(async move {
+                    let mut tx = conn.begin().await?;
+                    match f(&mut tx).await {
+                        Ok(value) => {
+                            tx.commit().await?;
+                            Ok(Ok(value))
+                        }
+                        Err(e) => {
+                            // The caller's error is the interesting one; a
+                            // rollback that itself failed would only mask
+                            // it.
+                            let _ = tx.rollback().await;
+                            Ok(Err(e))
+                        }
+                    }
+                })
+            })
+            .await;
+
+        match outcome {
+            Ok(caller) => caller,
+            Err(store) => Err(E::from(store)),
+        }
+    }
+
     /// The reader pool. Repositories issue plain `SELECT`s against this;
     /// nothing routed through here should write, since the pool's
     /// connections are not the connection the writer task owns.

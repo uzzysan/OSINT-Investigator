@@ -9,6 +9,15 @@
 //! MCP can do too. See `03-architecture.md` section 3.3/3.4 and
 //! `06-http-api.md`.
 //!
+//! # Where the behaviour is
+//!
+//! [`services`] is the application service layer: one method per use case,
+//! domain types in and out, every business rule in the project. It is not
+//! the HTTP layer and knows nothing about it. The axum handlers here — and
+//! the MCP tools in a later spec — are adapters over it, so one test suite
+//! proves both. [`testing`] builds one against a temporary database in a
+//! single call.
+//!
 //! Ticket 0001-04 gives this crate its first real behaviour: the axum
 //! server itself, liveness (`GET /api/v1/health`) and readiness
 //! (`GET /api/v1/ready`), the embedded frontend, the solo/token auth
@@ -25,8 +34,10 @@ mod error;
 mod health;
 mod paths;
 mod router;
+pub mod services;
 mod shutdown;
 mod state;
+pub mod testing;
 
 pub use config::{ApiConfig, AuthConfig};
 pub use error::ServeError;
