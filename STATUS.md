@@ -5,6 +5,84 @@ resume without archaeology.
 
 ---
 
+## 2026-09-10 (later still) — Ticket 11 done; the repository is on GitHub
+
+**Done**
+
+- **Ticket 11 — sources, citations and unsourced flagging.** Provenance at the
+  granularity claims are actually made at. Sources of four kinds — link, file
+  reference, manual note, agent run — each recording when it was *retrieved* as
+  distinct from when it was typed, with URLs kept as given and normalised through
+  `vesica-core`'s `Url` type, so the same page cited twice is one Source. A Source
+  can be cited on an Entity, a Relation or a single Property value; one Source
+  cites many facts and each citation carries an optional note. Reading an Entity
+  or Relation returns its citations. A Case's Sources list with what cites each,
+  a report of facts with no Source, and Case-level sourced/unsourced counts —
+  every one of them bounded, the counts stopping at a scan ceiling rather than
+  walking a Case of any size. Deleting a Source leaves the facts intact and marks
+  them unsourced.
+- **`repo::source` converted** to executor-generic functions. **No repository
+  traits remain in the workspace** — the seam is now the module boundary plus
+  `Db::transaction`, everywhere.
+
+**Verified independently**: 329 tests pass. `cargo fmt --check`, `cargo clippy
+--workspace --all-targets -- -D warnings`, `just check-deps` and `cargo deny
+check` all clean.
+
+**The two ambiguities the ticket left open, and how they were settled**
+
+- **`citation` is authoritative; `entity_prop.source_id` and
+  `relation_prop.source_id` are a derived cache.** The columns hold one source per
+  value while the table holds many, and left alone the two would drift, so "is
+  this value sourced" would depend on which you asked. The columns now cache the
+  *earliest surviving* citation, recomputed by `repo::source::refresh_prop_source`
+  in the same transaction as any change to that value's citations, and written by
+  nothing else. That is what keeps "which values are unsourced" an indexed
+  `source_id IS NULL` instead of a scan. Deleting a Source releases the cache to
+  the next surviving citation *before* the cascade removes the rows naming it —
+  the ordering is load-bearing and is commented as such.
+- **A citation does not survive the value it cites.** `entity_prop.id` is a rowid
+  and a Property edit is a delete and an insert, so replacing a phone number gives
+  it a new row and the old citation goes with the old row. Deliberate: a changed
+  value is a different claim, and carrying provenance across the change would
+  attach a source to a statement it never made, which is the one failure a
+  provenance feature must not have. The cost is that re-entering a value
+  re-sources it.
+
+**Fixed while reviewing**: a `pub const` that duplicated `DEFAULT_PAGE_SIZE` and
+was never exported or used, its now-unused import, and a `> "2020".to_string()`
+comparison in a test. All three were clippy or fmt failures the agent did not get
+to before its context ended.
+
+**Delivery**
+
+The repository now has a GitHub remote — `github.com/uzzysan/OSINT-Investigator`
+— and the operator pushed tickets 09 and 10 to it, so `origin/master` is at
+`2724637`. **The cloud session still cannot push**: the egress proxy refuses to
+inject a credential for a repository that is not in the session's authorized set
+(*"uzzysan/OSINT-Investigator is not in this session's authorized repository
+set"*), which is a policy denial and not something to retry. Adding the
+repository to the session's sources would fix it and is worth doing — with the
+remote in place a future session can also `git clone` instead of transplanting
+`.git` file by file, which was the slowest part of this session's start-up.
+
+Ticket 11 therefore ships the same way 09 and 10 did, as a git bundle applying
+onto `2724637`.
+
+**Next action**
+
+**12 (search), 13 (traversal), 14 (audit history and integrity check) and 15
+(custom schemas) are all unblocked and independent of each other.** 14 came free
+when 11 landed. This is the widest the frontier gets in M1 — and after it, M1's
+exit condition is in reach: a test that creates a case, 1,000 entities and 3,000
+relations, queries neighbours at depth 3 and asserts the audit log is complete.
+
+Wayfinder ticket 004 — the full built-in schema catalogue — is now three tickets
+overdue. Every one of 09, 10 and 11 hardened contracts against a schema set still
+marked provisional.
+
+---
+
 ## 2026-09-10 (later) — Tickets 09 and 10 done; the repo could not be committed to from the cloud
 
 **Done**

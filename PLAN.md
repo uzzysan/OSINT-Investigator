@@ -6,8 +6,9 @@ the plan is wrong and gets fixed.
 
 - **Status**: M0 complete; M1 well under way — entities and relations round-trip with full audit
 - **Last updated**: 2026-09-10
-- **Current milestone**: M1 — Domain and storage. Tickets 03, 06, 07, 08, 09 and 10 done;
-  11, 12, 13 and 15 are all on the frontier and independent of each other.
+- **Current milestone**: M1 — Domain and storage. Tickets 03, 06, 07, 08, 09, 10 and 11
+  done; 12, 13 and 15 are on the frontier and independent of each other, and 14 is now
+  unblocked.
 
 ---
 
@@ -82,14 +83,16 @@ installer runs end to end and the service answers `/api/v1/health` and
 - [x] `vesica-core`: caption derivation, ULID ids, validation errors carrying `fix`
 - [x] Migrations 0001–0006 implementing `docs/04-data-model.md`
 - [~] `vesica-store`: repositories for case, entity, relation, source, blob, audit
-      (case, entity + `entity_prop`, relation + `relation_prop`, tag and audit done as
-      executor-generic function modules; `source` is the last surviving trait; no blob repo yet)
+      (case, entity + `entity_prop`, relation + `relation_prop`, tag, audit and source all
+      done as executor-generic function modules — no repository traits remain; no blob repo
+      yet, and blobs stay out of scope until M4)
 - [x] Single-writer task + reader pool; every multi-step write in a transaction
 - [x] FTS5 table and sync triggers
 - [~] Graph queries: neighbourhood CTE (bounded neighbours done; shortest path and components pending), shortest path, connected components,
       each with a depth limit, a node budget and a `truncated` flag
 - [x] Audit log written on every mutation, in the same transaction, with `batch_id` grouping
 - [x] Soft delete, restore, purge (purge redacts the target's earlier audit payloads — docs/09-security-and-legal.md)
+- [x] Sources, citations at entity/relation/property-value granularity, and the unsourced report
 - [x] Property-based tests for normalisation; golden tests for the schema registry
 
 **Exit**: a test creates a case, 1,000 entities and 3,000 relations, queries
@@ -107,9 +110,12 @@ neighbours at depth 3, and asserts the audit log is complete.
       generalised over a `PropertyHost` trait so entity and relation values are
       normalised by the same code; entity deletion cascades to relations under a
       shared `batch_id` and restore undoes exactly that batch
-- [ ] 11 sources · [ ] 12 search · [ ] 13 traversal · [ ] 15 custom schemas
+- [x] Ticket 11 — sources, citations and unsourced flagging; `citation` is
+      authoritative and the `*_prop.source_id` columns are a derived cache of the
+      earliest surviving citation, which keeps the unsourced report an indexed
+      lookup; `repo::source` converted, so no repository traits remain
+- [ ] 12 search · [ ] 13 traversal · [ ] 14 audit history · [ ] 15 custom schemas
       — **all four are on the frontier now and independent of each other**
-- [ ] 14 audit history and integrity check — blocked by 11
 
 ---
 
