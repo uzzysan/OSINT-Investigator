@@ -54,6 +54,7 @@ use vesica_core::{
     PropertyValues, RelationSchema, WarningCode, render_entity_caption,
 };
 use vesica_store::SqliteConnection;
+use vesica_store::repo::source as store_source;
 use vesica_store::repo::{EntityFilter, EntityRow, NewAuditEntry, NewProp, PropRow};
 use vesica_store::repo::{audit, case, entity, tag};
 
@@ -188,6 +189,16 @@ pub struct PropertyValue {
     pub numeric: Option<f64>,
     /// The parsed span, for a `date` Property.
     pub date: Option<DateSpan>,
+    /// The Source of this value's earliest citation, or `None` when
+    /// nothing cites it — which is what "this fact is unsourced" means at
+    /// value granularity. Derived from the citations; see
+    /// [`super::source`].
+    pub source_id: Option<String>,
+    /// The handle that cites this exact value: pass it back as
+    /// [`super::CiteTarget::PropertyValue`], and match it against
+    /// [`super::CitationTarget::Property`] to see what a citation is about.
+    /// `None` only on a value that has not been stored yet.
+    pub value_ref: Option<String>,
 }
 
 /// Something that looked wrong about a value that was stored anyway.
@@ -230,6 +241,11 @@ pub struct Entity {
     pub tags: Vec<String>,
     /// Anything flagged about the values above. Empty is the normal case.
     pub warnings: Vec<PropertyWarning>,
+    /// Where this Entity's claims come from: the Sources cited for the
+    /// Entity as a whole and for its individual Property values. Empty
+    /// means unsourced — permitted, and flagged by
+    /// [`Services::unsourced_facts`].
+    pub citations: super::Citations,
     /// ISO-8601 UTC.
     pub created_at: String,
     /// Who recorded it — the analyst, or a named agent.
@@ -526,7 +542,16 @@ impl Services {
         let ctx = case_context(pool, &row.case_id).await?;
         let props = entity::props(pool, &row.id).await?;
         let tags = tag::for_entity(pool, &row.id).await?;
-        assemble(row, props, tags, &schema, &ctx, merged_from)
+        let id = row.id.clone();
+        let mut entity = assemble(row, props, tags, &schema, &ctx, merged_from)?;
+        // Citations are two more queries, and the helper that runs them
+        // needs one connection to run both on.
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| ServiceError::Store(vesica_store::StoreError::from(e)))?;
+        entity.citations = super::source::citations_of_entity(&mut conn, &id).await?;
+        Ok(entity)
     }
 
     /// A bounded page of Entities in one Case, newest first.
@@ -582,7 +607,7 @@ impl Services {
                 let ctx = case_context(&mut *conn, &row.case_id).await?;
                 let props = entity::props(&mut *conn, &row.id).await?;
                 let tags = tag::for_entity(&mut *conn, &row.id).await?;
-                let before = assemble(
+                let mut before = assemble(
                     row.clone(),
                     props.clone(),
                     tags.clone(),
@@ -590,6 +615,7 @@ impl Services {
                     &ctx,
                     None,
                 )?;
+                before.citations = super::source::citations_of_entity(conn, &before.id).await?;
 
                 let caption_before = row.caption.clone();
                 let confidence_before = row.confidence.clone();
@@ -618,7 +644,8 @@ impl Services {
                 }
 
                 row.updated_at = now;
-                let after = assemble(row.clone(), props, tags, &schema, &ctx, None)?;
+                let mut after = assemble(row.clone(), props, tags, &schema, &ctx, None)?;
+                after.citations = before.citations.clone();
 
                 audit::record(
                     conn,
@@ -666,7 +693,7 @@ impl Services {
                 let ctx = case_context(&mut *conn, &row.case_id).await?;
                 let existing = entity::props(&mut *conn, &row.id).await?;
                 let tags = tag::for_entity(&mut *conn, &row.id).await?;
-                let before = assemble(
+                let mut before = assemble(
                     row.clone(),
                     existing.clone(),
                     tags.clone(),
@@ -674,6 +701,7 @@ impl Services {
                     &ctx,
                     None,
                 )?;
+                before.citations = super::source::citations_of_entity(conn, &before.id).await?;
 
                 if request.is_empty() {
                     return Ok(before);
@@ -836,7 +864,7 @@ impl Services {
 
                 let props = entity::props(&mut *conn, &row.id).await?;
                 let tags = tag::for_entity(&mut *conn, &row.id).await?;
-                let after = assemble(row.clone(), props, tags, &schema, &ctx, None)?;
+                let mut after = assemble(row.clone(), props, tags, &schema, &ctx, None)?;
 
                 let mut entry = entry(
                     &actor,
@@ -852,6 +880,7 @@ impl Services {
                 if let Some(batch_id) = batch_id {
                     super::relation::cascade_restore(conn, &batch_id, &now, &actor).await?;
                 }
+                after.citations = super::source::citations_of_entity(conn, &after.id).await?;
                 Ok(after)
             })
         })
@@ -1466,7 +1495,9 @@ async fn load(
 ) -> Result<Entity, ServiceError> {
     let props = entity::props(&mut *conn, &row.id).await?;
     let tags = tag::for_entity(&mut *conn, &row.id).await?;
-    assemble(row, props, tags, schema, ctx, merged_from)
+    let mut entity = assemble(row, props, tags, schema, ctx, merged_from)?;
+    entity.citations = super::source::citations_of_entity(conn, &entity.id).await?;
+    Ok(entity)
 }
 
 /// Turns stored rows into the domain type, deriving the warnings from the
@@ -1521,6 +1552,11 @@ fn assemble(
             _ => None,
         };
 
+        // A row that has not been written yet has no id, and therefore no
+        // handle a citation could name it by.
+        let value_ref = (prop.id != 0)
+            .then(|| store_source::prop_target_id(store_source::PropHost::Entity, prop.id));
+
         properties.push(PropertyValue {
             prop: prop.prop,
             ptype,
@@ -1529,6 +1565,8 @@ fn assemble(
             value_norm: prop.value_norm,
             numeric: prop.value_num,
             date,
+            source_id: prop.source_id,
+            value_ref,
         });
     }
 
@@ -1541,6 +1579,11 @@ fn assemble(
         properties,
         tags: tags.into_iter().map(|t| t.name).collect(),
         warnings,
+        // Filled by whoever is about to hand this Entity to a caller —
+        // reading citations is a query, and `assemble` is pure. A snapshot
+        // built for an audit entry does not need them and does not get
+        // them.
+        citations: super::Citations::default(),
         created_at: row.created_at,
         created_by: row.created_by,
         updated_at: row.updated_at,

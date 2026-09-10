@@ -238,6 +238,14 @@ pub enum AuditAction {
     Tag,
     /// A tag was detached.
     Untag,
+    /// A Source was cited for a fact. Filed against the Entity or Relation
+    /// the claim is about — for a Property value, its host — because "where
+    /// did this come from" is a question asked of the fact, and the trail
+    /// has to answer it where a reader will look.
+    Cite,
+    /// A citation was withdrawn. The fact stays; only the claim about where
+    /// it came from goes.
+    Uncite,
 }
 
 impl AuditAction {
@@ -253,6 +261,8 @@ impl AuditAction {
             AuditAction::Purge => "purge",
             AuditAction::Tag => "tag",
             AuditAction::Untag => "untag",
+            AuditAction::Cite => "cite",
+            AuditAction::Uncite => "uncite",
         }
     }
 
@@ -267,6 +277,8 @@ impl AuditAction {
             "purge" => Ok(AuditAction::Purge),
             "tag" => Ok(AuditAction::Tag),
             "untag" => Ok(AuditAction::Untag),
+            "cite" => Ok(AuditAction::Cite),
+            "uncite" => Ok(AuditAction::Uncite),
             other => Err(ServiceError::Inconsistent(format!(
                 "audit_log.action holds `{other}`, which no service method writes"
             ))),

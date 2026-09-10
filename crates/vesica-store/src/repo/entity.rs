@@ -17,10 +17,17 @@
 //! resolves by id through [`find`], which is how an id quoted in an old
 //! report keeps working.
 //!
-//! `entity_prop.source_id` is written by nothing here. Attaching a Source
-//! to an individual property value is ticket 0001-11's; until then the
-//! column stays null, and [`insert_prop`] deliberately leaves it alone so
-//! that a later ticket owns it outright.
+//! `entity_prop.source_id` belongs to [`super::source`], which ticket
+//! 0001-11 made the owner of it: the column is a **derived cache** of the
+//! earliest citation on that value, so a value starts unsourced (which is
+//! why [`insert_prop`] still does not write it) and only
+//! [`super::source::refresh_prop_source`] ever computes it. What this
+//! module does owe that arrangement is cleanup: `citation.target_id` is
+//! polymorphic text with no foreign key to point at it, so a property value
+//! that goes must take its citations with it or leave them to be misread
+//! against a recycled row id. [`delete_prop`], [`delete_props_named`] and
+//! [`purge`] therefore delete citations in the same transaction as the rows
+//! they are about.
 
 use sqlx::FromRow;
 use sqlx::SqliteConnection;
@@ -244,6 +251,10 @@ pub async fn save(conn: &mut SqliteConnection, row: &EntityRow) -> Result<bool, 
 /// `foreign_keys = ON` on every connection is load-bearing rather than
 /// hygiene. Returns whether a row was there to delete.
 pub async fn purge(conn: &mut SqliteConnection, id: &str) -> Result<bool, StoreError> {
+    // Citations first: they name their targets by an untyped `target_id`
+    // that no foreign key can cascade, and the statements that find them
+    // read rows this delete is about to take away.
+    super::source::purge_citations_of_entity(&mut *conn, id).await?;
     let result = sqlx::query("DELETE FROM entity WHERE id = ?")
         .bind(id)
         .execute(&mut *conn)
@@ -298,6 +309,13 @@ pub async fn delete_props_named(
     entity_id: &str,
     prop: &str,
 ) -> Result<u64, StoreError> {
+    super::source::delete_named_prop_citations(
+        &mut *conn,
+        super::source::PropHost::Entity,
+        entity_id,
+        prop,
+    )
+    .await?;
     let result = sqlx::query("DELETE FROM entity_prop WHERE entity_id = ? AND prop = ?")
         .bind(entity_id)
         .bind(prop)
@@ -309,6 +327,7 @@ pub async fn delete_props_named(
 /// Removes one specific property value, by the row id [`props`] reported.
 /// Returns whether a row was there.
 pub async fn delete_prop(conn: &mut SqliteConnection, id: i64) -> Result<bool, StoreError> {
+    super::source::delete_prop_citations(&mut *conn, super::source::PropHost::Entity, id).await?;
     let result = sqlx::query("DELETE FROM entity_prop WHERE id = ?")
         .bind(id)
         .execute(&mut *conn)
@@ -467,7 +486,8 @@ mod tests {
         assert_eq!(stored[1].value, "+48601234568");
         assert!(
             stored.iter().all(|p| p.source_id.is_none()),
-            "source attachment is a later ticket and must stay untouched"
+            "a value with no citation is unsourced; only `source::refresh_prop_source` \
+             ever sets this column"
         );
 
         store

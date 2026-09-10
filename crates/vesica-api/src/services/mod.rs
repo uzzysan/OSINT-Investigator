@@ -50,12 +50,20 @@
 //! obligation is owed to a purged Entity, but running the case-scoped one for
 //! it would erase the payloads of every other Entity in the Case as well.
 //! Nothing else in this codebase alters an audit entry, and nothing else may.
+//!
+//! # Where a fact came from
+//!
+//! [`source`] owns provenance: Sources, citations and the flagging of facts
+//! that have neither. Read its module docs before touching
+//! `entity_prop.source_id` — that column is a derived cache of the
+//! `citation` table, and exactly one function computes it.
 
 mod case;
 mod entity;
 mod error;
 mod relation;
 mod slug;
+mod source;
 mod tag;
 
 pub use case::{
@@ -70,6 +78,11 @@ pub use error::{Actor, ServiceError};
 pub use relation::{
     CreateRelation, Endpoint, EndpointRole, EndpointWarning, Interval, Relation, RelationList,
     RelationQuery, RelationSummary, RelationWarningCode, SetInterval, UpdateRelation,
+};
+pub use source::{
+    Citation, CitationTarget, Citations, CiteSource, CiteTarget, Coverage, CreateSource, Source,
+    SourceCoverage, SourceKind, SourceList, SourceQuery, SourceUsage, UnsourcedFacts,
+    UnsourcedQuery, UnsourcedValue,
 };
 pub use tag::{TagList, TagSummary};
 

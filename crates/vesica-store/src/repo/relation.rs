@@ -22,10 +22,12 @@
 //! read hides), and a store that silently hid rows would make restore
 //! impossible to express.
 //!
-//! `relation_prop.source_id` is written by nothing here. Attaching a Source
-//! to an individual Property value is ticket 0001-11's, and
-//! [`insert_prop`] deliberately leaves the column alone so that a later
-//! ticket owns it outright.
+//! `relation_prop.source_id` belongs to [`super::source`] on exactly the
+//! terms [`super::entity`] describes: the column is a derived cache of the
+//! earliest citation on that value, so [`insert_prop`] still leaves it
+//! null, and this module's part of the bargain is deleting a value's
+//! citations when the value goes — [`delete_prop`], [`delete_props_named`]
+//! and [`purge`] all do, in the same transaction.
 
 use sqlx::FromRow;
 use sqlx::SqliteConnection;
@@ -334,6 +336,9 @@ pub async fn save(conn: &mut SqliteConnection, row: &RelationRow) -> Result<bool
 /// every `relation_prop` row goes with it via `ON DELETE CASCADE`. Returns
 /// whether a row was there to delete.
 pub async fn purge(conn: &mut SqliteConnection, id: &str) -> Result<bool, StoreError> {
+    // Citations first: no foreign key can cascade an untyped `target_id`,
+    // and the statements that find them read rows this delete removes.
+    super::source::purge_citations_of_relation(&mut *conn, id).await?;
     let result = sqlx::query("DELETE FROM relation WHERE id = ?")
         .bind(id)
         .execute(&mut *conn)
@@ -388,6 +393,13 @@ pub async fn delete_props_named(
     relation_id: &str,
     prop: &str,
 ) -> Result<u64, StoreError> {
+    super::source::delete_named_prop_citations(
+        &mut *conn,
+        super::source::PropHost::Relation,
+        relation_id,
+        prop,
+    )
+    .await?;
     let result = sqlx::query("DELETE FROM relation_prop WHERE relation_id = ? AND prop = ?")
         .bind(relation_id)
         .bind(prop)
@@ -399,6 +411,7 @@ pub async fn delete_props_named(
 /// Removes one specific Property value, by the row id [`props`] reported.
 /// Returns whether a row was there.
 pub async fn delete_prop(conn: &mut SqliteConnection, id: i64) -> Result<bool, StoreError> {
+    super::source::delete_prop_citations(&mut *conn, super::source::PropHost::Relation, id).await?;
     let result = sqlx::query("DELETE FROM relation_prop WHERE id = ?")
         .bind(id)
         .execute(&mut *conn)

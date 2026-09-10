@@ -64,6 +64,7 @@ use vesica_core::{
 };
 use vesica_store::SqliteConnection;
 use vesica_store::repo::relation::{EndpointRole as StoreEndpointRole, RelationFilter};
+use vesica_store::repo::source as store_source;
 use vesica_store::repo::{EntityRow, NewAuditEntry, NewRelationProp, RelationPropRow, RelationRow};
 use vesica_store::repo::{audit, entity, relation};
 
@@ -238,6 +239,11 @@ pub struct Relation {
     /// Endpoints the Schema did not expect. Empty is the normal case; a
     /// non-empty list is guidance, not a defect.
     pub endpoint_warnings: Vec<EndpointWarning>,
+    /// Where this Relation's claims come from: the Sources cited for the
+    /// edge as a whole and for its individual Property values. Empty means
+    /// unsourced — permitted, and flagged by
+    /// [`Services::unsourced_facts`].
+    pub citations: super::Citations,
     /// ISO-8601 UTC.
     pub created_at: String,
     /// Who recorded it — the analyst, or a named agent.
@@ -490,7 +496,8 @@ impl Services {
         let props = relation::props(pool, &row.id).await?;
         let source = read_endpoint(pool, &row.source_id).await?;
         let target = read_endpoint(pool, &row.target_id).await?;
-        assemble(
+        let relation_id = row.id.clone();
+        let mut relation = assemble(
             row,
             props,
             &schema,
@@ -498,7 +505,15 @@ impl Services {
             &self.schemas_handle(),
             &source,
             &target,
-        )
+        )?;
+        // Citations are two more queries, and the helper that runs them
+        // needs one connection to run both on.
+        let mut conn = pool
+            .acquire()
+            .await
+            .map_err(|e| ServiceError::Store(vesica_store::StoreError::from(e)))?;
+        relation.citations = super::source::citations_of_relation(&mut conn, &relation_id).await?;
+        Ok(relation)
     }
 
     /// A bounded page of Relations in one Case, newest first.
@@ -567,7 +582,7 @@ impl Services {
                 let props = relation::props(&mut *conn, &row.id).await?;
                 let source = read_endpoint(&mut *conn, &row.source_id).await?;
                 let target = read_endpoint(&mut *conn, &row.target_id).await?;
-                let before = assemble(
+                let mut before = assemble(
                     row.clone(),
                     props.clone(),
                     &schema,
@@ -576,6 +591,7 @@ impl Services {
                     &source,
                     &target,
                 )?;
+                before.citations = super::source::citations_of_relation(conn, &before.id).await?;
 
                 let was = (
                     row.caption.clone(),
@@ -621,7 +637,7 @@ impl Services {
                 }
 
                 row.updated_at = now;
-                let after = assemble(
+                let mut after = assemble(
                     row.clone(),
                     props,
                     &schema,
@@ -630,6 +646,7 @@ impl Services {
                     &source,
                     &target,
                 )?;
+                after.citations = before.citations.clone();
 
                 audit::record(
                     conn,
@@ -674,7 +691,7 @@ impl Services {
                 let existing = relation::props(&mut *conn, &row.id).await?;
                 let source = read_endpoint(&mut *conn, &row.source_id).await?;
                 let target = read_endpoint(&mut *conn, &row.target_id).await?;
-                let before = assemble(
+                let mut before = assemble(
                     row.clone(),
                     existing.clone(),
                     &schema,
@@ -683,6 +700,7 @@ impl Services {
                     &source,
                     &target,
                 )?;
+                before.citations = super::source::citations_of_relation(conn, &before.id).await?;
 
                 if request.is_empty() {
                     return Ok(before);
@@ -837,7 +855,7 @@ impl Services {
                 let props = relation::props(&mut *conn, &row.id).await?;
                 let source = read_endpoint(&mut *conn, &row.source_id).await?;
                 let target = read_endpoint(&mut *conn, &row.target_id).await?;
-                let after = assemble(
+                let mut after = assemble(
                     row.clone(),
                     props,
                     &schema,
@@ -860,6 +878,7 @@ impl Services {
                 )
                 .await?;
                 relation::save(conn, &row).await?;
+                after.citations = super::source::citations_of_relation(conn, &after.id).await?;
                 Ok(after)
             })
         })
@@ -1279,7 +1298,9 @@ async fn load(
     let props = relation::props(&mut *conn, &row.id).await?;
     let source = read_endpoint(&mut *conn, &row.source_id).await?;
     let target = read_endpoint(&mut *conn, &row.target_id).await?;
-    assemble(row, props, schema, ctx, schemas, &source, &target)
+    let mut relation = assemble(row, props, schema, ctx, schemas, &source, &target)?;
+    relation.citations = super::source::citations_of_relation(conn, &relation.id).await?;
+    Ok(relation)
 }
 
 /// Turns stored rows into the domain type, deriving the warnings as it
@@ -1333,6 +1354,11 @@ fn assemble(
             // `relation_prop` has no date columns: a Relation's dates are
             // its interval, which lives on the relation row itself.
             date: None,
+            source_id: prop.source_id,
+            // A row that has not been written yet has no id, and therefore
+            // no handle a citation could name it by.
+            value_ref: (prop.id != 0)
+                .then(|| store_source::prop_target_id(store_source::PropHost::Relation, prop.id)),
         });
     }
 
@@ -1373,6 +1399,9 @@ fn assemble(
         properties,
         warnings,
         endpoint_warnings,
+        // Filled by whoever is about to hand this Relation to a caller —
+        // reading citations is a query, and `assemble` is pure.
+        citations: super::Citations::default(),
         created_at: row.created_at,
         created_by: row.created_by,
         updated_at: row.updated_at,

@@ -43,8 +43,9 @@ use vesica_core::{PropertyValues, SchemaRegistry};
 use vesica_store::testing::{TestStore, test_store};
 
 use crate::services::{
-    Actor, Case, CreateCase, CreateEntity, CreateRelation, Entity, Relation, ServiceConfig,
-    ServiceError, Services, SetInterval,
+    Actor, Case, Citation, CiteSource, CiteTarget, CreateCase, CreateEntity, CreateRelation,
+    CreateSource, Entity, Relation, ServiceConfig, ServiceError, Services, SetInterval, Source,
+    SourceKind,
 };
 
 /// A [`Services`] and the temporary database it runs against. Dropping this
@@ -258,6 +259,76 @@ pub async fn seed_small_graph(services: &Services) -> Result<SmallGraph, Service
         directorship,
         family,
     })
+}
+
+/// Records a `url` Source in one Case, through the service layer, so a test
+/// that is really about provenance gets something to cite in one line.
+///
+/// The title is derived from the URL because a test that has to invent one
+/// is a test saying something it does not mean.
+pub async fn seed_source(
+    services: &Services,
+    case_id: &str,
+    url: &str,
+) -> Result<Source, ServiceError> {
+    services
+        .create_source(
+            CreateSource {
+                case_id: case_id.to_string(),
+                kind: Some(SourceKind::Link),
+                title: Some(format!("Filing at {url}")),
+                url: Some(url.to_string()),
+                retrieved_at: Some("2024-05-01T09:00:00Z".to_string()),
+                ..Default::default()
+            },
+            &Actor::analyst(),
+        )
+        .await
+}
+
+/// Cites a Source for a whole Entity.
+pub async fn cite_entity(
+    services: &Services,
+    source: &Source,
+    entity: &Entity,
+) -> Result<Citation, ServiceError> {
+    services
+        .cite_source(
+            CiteSource {
+                source_id: source.id.clone(),
+                target: CiteTarget::Entity {
+                    entity_id: entity.id.clone(),
+                },
+                note: None,
+            },
+            &Actor::analyst(),
+        )
+        .await
+}
+
+/// Cites a Source for one value of one of an Entity's Properties, named the
+/// way a read reports it: the Property and the value's position within it.
+pub async fn cite_property(
+    services: &Services,
+    source: &Source,
+    entity: &Entity,
+    prop: &str,
+    seq: usize,
+) -> Result<Citation, ServiceError> {
+    services
+        .cite_source(
+            CiteSource {
+                source_id: source.id.clone(),
+                target: CiteTarget::EntityProperty {
+                    entity_id: entity.id.clone(),
+                    prop: prop.to_string(),
+                    seq: Some(seq),
+                },
+                note: None,
+            },
+            &Actor::analyst(),
+        )
+        .await
 }
 
 /// Turns the `(name, values)` pairs a test writes into the map the service
