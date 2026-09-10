@@ -4,9 +4,10 @@
 between sections, record what was learned. If the plan and the code disagree,
 the plan is wrong and gets fixed.
 
-- **Status**: M0 complete — the workspace builds, the service runs, the installer works
-- **Last updated**: 2026-09-08
-- **Current milestone**: M1 — Domain and storage. Tickets 03, 06, 07 and 08 done; 09 is next.
+- **Status**: M0 complete; M1 well under way — entities and relations round-trip with full audit
+- **Last updated**: 2026-09-10
+- **Current milestone**: M1 — Domain and storage. Tickets 03, 06, 07, 08, 09 and 10 done;
+  11, 12, 13 and 15 are all on the frontier and independent of each other.
 
 ---
 
@@ -81,6 +82,8 @@ installer runs end to end and the service answers `/api/v1/health` and
 - [x] `vesica-core`: caption derivation, ULID ids, validation errors carrying `fix`
 - [x] Migrations 0001–0006 implementing `docs/04-data-model.md`
 - [~] `vesica-store`: repositories for case, entity, relation, source, blob, audit
+      (case, entity + `entity_prop`, relation + `relation_prop`, tag and audit done as
+      executor-generic function modules; `source` is the last surviving trait; no blob repo yet)
 - [x] Single-writer task + reader pool; every multi-step write in a transaction
 - [x] FTS5 table and sync triggers
 - [~] Graph queries: neighbourhood CTE (bounded neighbours done; shortest path and components pending), shortest path, connected components,
@@ -98,9 +101,15 @@ neighbours at depth 3, and asserts the audit log is complete.
 
 - [x] Ticket 08 — case lifecycle, the service layer, and the fixture later
       tickets build their tests on
-- [ ] Ticket 09 — entities, properties and tags  ← **next**
-- [ ] Ticket 10 — relations · [ ] 11 sources · [ ] 12 search · [ ] 13 traversal
-      · [ ] 14 audit history · [ ] 15 custom schemas
+- [x] Ticket 09 — entities, properties and tags; `repo::entity` converted to
+      executor-generic functions and extended to `entity_prop`; `repo::tag` added
+- [x] Ticket 10 — relations with properties and intervals; the property pipeline
+      generalised over a `PropertyHost` trait so entity and relation values are
+      normalised by the same code; entity deletion cascades to relations under a
+      shared `batch_id` and restore undoes exactly that batch
+- [ ] 11 sources · [ ] 12 search · [ ] 13 traversal · [ ] 15 custom schemas
+      — **all four are on the frontier now and independent of each other**
+- [ ] 14 audit history and integrity check — blocked by 11
 
 ---
 

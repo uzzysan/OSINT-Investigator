@@ -5,6 +5,144 @@ resume without archaeology.
 
 ---
 
+## 2026-09-10 (later) — Tickets 09 and 10 done; the repo could not be committed to from the cloud
+
+**Done**
+
+- **Ticket 09 — entities, properties and tags.** The act the application exists
+  for. Create an Entity from a Schema and a set of repeating Properties; read it
+  with its values and tags; list within a Case filtered by schema, confidence or
+  tag; change caption and confidence; add, replace and remove Property values;
+  tag and untag; soft delete, restore, and a purge that must be confirmed. Each
+  value keeps the raw input beside its normalised form, normalised in the Case's
+  default region. Checksum failures surface as warnings on the returned Entity
+  rather than refusing the value. Captions derive from the Schema template and
+  can be overridden. Caller-supplied ULIDs are accepted so an agent can build a
+  subgraph locally and submit it whole; a duplicate is refused with a usable
+  message. A merged-away id still resolves, reporting the survivor.
+  `repo::entity` became an executor-generic function module covering
+  `entity_prop`; `repo::tag` is new.
+- **Ticket 10 — relations with properties and intervals.** Typed, directed edges
+  within one Case, carrying their own Properties and a validity interval with an
+  explicit precision, so a directorship that ended in 2021 is not drawn as
+  current and an edge known only to have existed "in 2019" says exactly that.
+  Endpoint Schema constraints guide rather than forbid: a violation is recorded
+  and flagged, not refused. Undirected relations are distinguishable from
+  directed ones and answer an endpoint query from either end. Cross-case
+  relations are refused with an explanation. `repo::relation` converted the same
+  way; the ticket-03 `RelationRepo` trait is gone and `source` is now the last
+  surviving repository trait.
+- **The property pipeline is shared, not duplicated.** Ticket 10 generalised
+  ticket 09's `check_shape` / `require_required` / `normalize_all` / `plan_edit`
+  over a `PropertyHost` trait implemented by both `EntitySchema` and
+  `RelationSchema`. There is one multiplicity rule, one required-property rule
+  and one normalisation call for entity and relation values alike.
+- **Cascade and undo.** Deleting an Entity takes its Relations with it, under a
+  `batch_id` shared with the Entity's own delete entry, and restoring the Entity
+  restores exactly that batch. A Relation the analyst deleted on its own
+  beforehand belongs to a different batch and stays deleted. The alternative —
+  matching on `deleted_at` — breaks whenever two deletes land in the same
+  millisecond, which the test suite reaches easily.
+
+**Verified independently, not taken on report**: 299 tests pass (213 at the
+start of the session); `cargo fmt --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, `just check-deps` and `cargo deny check` all
+clean. Every gate was run by the orchestrating session after each ticket, not
+only by the agent that wrote it.
+
+**Two defects found in review of ticket 09, both fixed before it was accepted**
+
+- **A no-op check that could never fire.** `update_entity` decided "did anything
+  change" by comparing the assembled `Entity` before and after — but it had
+  already set `updated_at` to the current time, and `Entity` compares
+  `updated_at`. So the two were never equal unless the update landed in the same
+  millisecond as the create, and every no-op update wrote an audit entry saying
+  nothing had happened. Now the comparison is made on the fields the use case can
+  actually change, before the timestamp is touched. Worth noting that this is the
+  second timing-dependent bug in two sessions (the first was the ULID one below):
+  both were checks that silently degraded to no-ops rather than failing loudly.
+- **Two tests asserting normalisation `vesica-core` deliberately does not do.**
+  They expected an email's local-part dots to be folded for any domain (that is a
+  Google-only rule, and applying it everywhere merges two different people at any
+  provider where a dot is significant) and expected `value_norm` to transliterate
+  `Łukasz` to `lukasz` (`ł` has no NFKD decomposition; the ASCII transcription is
+  a blocking key, which belongs to the resolver in M5 and is not stored on the
+  Property). The implementation was right and the tests were wrong. Both now
+  assert the real behaviour, with the reasoning written down, and each gained a
+  second case pinning the other half of the rule.
+
+**A decision that changed a standing rule, recorded here because it did**
+
+`docs/AGENT-BRIEF.md` said there was exactly ONE update path against
+`audit_log`. There are now two: `redact_case_payloads` for a Case purge and
+`redact_target_payloads` for an Entity purge. They are separate because
+`docs/09-security-and-legal.md` owes erasure to a purged Entity as well as a
+purged Case, and reusing the case-scoped function for one Entity would erase the
+audit payloads of every other Entity in that Case — destroying history nobody
+asked to erase in the name of erasing history somebody did. AGENT-BRIEF.md and
+the service-layer module docs were updated to say two, and to say there must
+never be a third.
+
+**Not done — and the reason matters for how the next session should be set up**
+
+- **Nothing could be committed into the project folder from the cloud session.**
+  Two independent blocks: the device shell never mounted the folder for the whole
+  session (`sandbox-helper: no Plan9 drive shares mounted under
+  /mnt/.virtiofs-root/shared`), so there was no `git` on the Windows machine; and
+  the remote file tools refuse every path under `.git` outright — *"Writing to
+  .git is not permitted via remote tools."* Loose objects, refs and the index
+  were all rejected.
+- **The work is therefore delivered as a git bundle**, `Claude
+  outputs/vesica-tickets.bundle`, with `Claude outputs/HOW-TO-APPLY.md` beside
+  it. This is better than syncing loose files would have been: a bundle keeps
+  each ticket as its own commit with its own message, where loose files would
+  have collapsed both into one undifferentiated pile and left the tree dirty.
+  It was verified by applying it to a throwaway clone, which produced a tree
+  identical to the one the tests ran against. **Until somebody runs `git pull
+  "Claude outputs\vesica-tickets.bundle" master`, the working tree here is still
+  at `c0dd677` and none of this work is in it.**
+- If the next session wants to commit directly again, the device shell's mount
+  has to be working. That is worth checking at the start of a session rather
+  than discovering after a ticket is finished.
+
+**Known gaps carried forward from these two tickets**
+
+- **No `purge_relation`.** Purging an Entity or a Case destroys relations through
+  the foreign-key cascade, but writes no per-relation audit entry and redacts no
+  relation audit payload — and a relation's payload names both its endpoints. If
+  the erasure obligation reaches a purged Entity's edges, that is unfinished.
+- **`relation_prop` has no date columns.** No relation Schema declares a `date`
+  Property today, so nothing is broken; if one ever does, its value is stored but
+  `PropertyValue::date` comes back `None`. A trap for whoever adds such a Schema.
+- **Endpoint warnings are derived at read, not stored.** Deliberate: the warning
+  is today's ontology judging data that has not changed, so when the catalogue
+  grows a Schema that makes the combination sensible the warning must stop
+  appearing without a migration. What is recorded permanently is the audit
+  snapshot naming the flagged endpoints' schema ids.
+- **The cascade is bounded at 1,000 passes of 1,000 rows** and returns
+  `Inconsistent` beyond that rather than leaving a half-cascaded graph.
+- **Spec drift, flagged but not fixed** (agents may not edit `docs/`):
+  `docs/specs/0001-foundation-and-domain-core.md` still describes repositories as
+  traits and says compile-time-checked queries are used, both superseded; and
+  `docs/04-data-model.md` 4.1.3 shows `Ownership`'s source as `Organization`,
+  which is not in the catalogue. None of it blocked the work.
+
+**Next action**
+
+Apply the bundle. Then the frontier is unusually wide: **11 (sources), 12
+(search), 13 (traversal) and 15 (custom schemas) are all unblocked and
+independent of each other** — the first real opportunity to run tickets in
+parallel, provided each agent gets its own `CARGO_TARGET_DIR` and the file
+ownership is checked first (11, 12 and 15 all touch the service layer, so their
+disjointness is not obvious and should be established before, not during).
+14 stays blocked behind 11.
+
+Wayfinder ticket 004 — the full built-in schema catalogue — is now more pressing
+than it was: 09 and 10 both hardened the property and endpoint contracts against
+a schema set that is still explicitly provisional.
+
+---
+
 ## 2026-09-10 — Ticket 08 done; a latent ordering bug found and fixed
 
 **Done**
