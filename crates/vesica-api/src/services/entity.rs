@@ -36,7 +36,11 @@
 //!
 //! # Deletion, in two strengths
 //!
-//! - **Delete** — soft, reversible and hidden from every read.
+//! - **Delete** — soft, reversible and hidden from every read. It takes
+//!   every Relation touching the Entity with it, in the same transaction,
+//!   so the graph never contains an edge to a node that is not there; a
+//!   restore brings back exactly the edges that deletion took down. See
+//!   [`super::relation`].
 //! - **Purge** — separate, explicitly confirmed, irreversible, and it
 //!   redacts the payloads of the Entity's own earlier audit entries because
 //!   those payloads are copies of exactly the data the purge was asked to
@@ -46,8 +50,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use vesica_core::{
-    DatePrecision, EntitySchema, NormalizeContext, Normalized, PropertyType, PropertyValues,
-    WarningCode, render_entity_caption,
+    DatePrecision, EntitySchema, NormalizeContext, Normalized, PropertyDef, PropertyType,
+    PropertyValues, RelationSchema, WarningCode, render_entity_caption,
 };
 use vesica_store::SqliteConnection;
 use vesica_store::repo::{EntityFilter, EntityRow, NewAuditEntry, NewProp, PropRow};
@@ -348,7 +352,7 @@ pub struct EditProperties {
 
 impl EditProperties {
     /// Whether this asks for nothing at all.
-    fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.replace.is_empty() && self.remove.is_empty() && self.add.is_empty()
     }
 }
@@ -675,7 +679,8 @@ impl Services {
                     return Ok(before);
                 }
 
-                let plan = plan_edit(&schema, &existing, &request, &ctx, &row.id)?;
+                let seen: Vec<ExistingValue> = existing.iter().map(ExistingValue::of).collect();
+                let plan = plan_edit(&schema, &seen, &request, &ctx)?;
                 if plan.is_noop() {
                     return Ok(before);
                 }
@@ -690,7 +695,11 @@ impl Services {
                     .filter(|p| !plan.delete_rows.contains(&p.id))
                     .cloned()
                     .collect();
-                kept.extend(plan.insert_rows.clone());
+                kept.extend(
+                    plan.inserts
+                        .iter()
+                        .map(|planned| planned.value.as_prop_row(&row.id, planned.seq)),
+                );
                 sort_props(&mut kept);
 
                 if was_derived {
@@ -718,8 +727,9 @@ impl Services {
                 for row_id in &plan.delete_rows {
                     entity::delete_prop(conn, *row_id).await?;
                 }
-                for new in &plan.inserts {
-                    entity::insert_prop(conn, new).await?;
+                for planned in &plan.inserts {
+                    let new = planned.value.as_new_prop(&row.id, planned.seq);
+                    entity::insert_prop(conn, &new).await?;
                 }
                 entity::save(conn, &row).await?;
 
@@ -732,6 +742,14 @@ impl Services {
     /// Deletes an Entity, reversibly: it disappears from every read and
     /// [`Services::restore_entity`] brings it back exactly as it was, tags
     /// and Properties included.
+    ///
+    /// **Every Relation touching it goes too**, in the same transaction, so
+    /// that the graph never contains an edge to a node that is not there
+    /// (ticket 0001-10). Those cascaded deletions share a `batch_id` with
+    /// this one — which is exactly what `04-data-model.md` says a batch is
+    /// for, "groups related changes for undo" — so that restoring the Entity
+    /// can bring back the edges *this* deletion took down and leave alone
+    /// any that were deleted separately beforehand.
     ///
     /// Deleting an already-deleted Entity changes nothing and records
     /// nothing; deleting one that never existed is
@@ -758,29 +776,34 @@ impl Services {
 
                 let mut deleted = row;
                 deleted.deleted_at = Some(now.clone());
-                deleted.updated_at = now;
+                deleted.updated_at = now.clone();
 
-                audit::record(
-                    conn,
-                    entry(
-                        &actor,
-                        AuditAction::Delete,
-                        &deleted.case_id,
-                        &deleted.id,
-                        snapshot(&before),
-                        None,
-                    ),
-                )
-                .await?;
+                let batch_id = vesica_store::new_id();
+                let mut entry = entry(
+                    &actor,
+                    AuditAction::Delete,
+                    &deleted.case_id,
+                    &deleted.id,
+                    snapshot(&before),
+                    None,
+                );
+                entry.batch_id = Some(batch_id.clone());
+                audit::record(conn, entry).await?;
                 entity::save(conn, &deleted).await?;
+                super::relation::cascade_delete(conn, &deleted.id, &now, &actor, &batch_id).await?;
                 Ok(())
             })
         })
         .await
     }
 
-    /// Brings a soft-deleted Entity back. Restoring one that is not deleted
-    /// changes nothing and records nothing.
+    /// Brings a soft-deleted Entity back, along with the Relations that
+    /// this Entity's deletion took down — and only those. A Relation
+    /// deleted on its own beforehand belongs to a different batch and stays
+    /// deleted, because the analyst deleted it for a reason of its own.
+    ///
+    /// Restoring one that is not deleted changes nothing and records
+    /// nothing.
     pub async fn restore_entity(&self, id: &str, actor: &Actor) -> Result<Entity, ServiceError> {
         let id = id.to_string();
         let now = vesica_store::now();
@@ -798,26 +821,37 @@ impl Services {
                     return load(conn, row, &schema, &ctx, None).await;
                 }
 
+                // Which deletion is being undone, read before the row is
+                // changed: its batch names the edges that went with it.
+                let batch_id = audit::latest_batch_for(
+                    &mut *conn,
+                    TARGET_ENTITY,
+                    &row.id,
+                    AuditAction::Delete.as_str(),
+                )
+                .await?;
+
                 row.deleted_at = None;
-                row.updated_at = now;
+                row.updated_at = now.clone();
 
                 let props = entity::props(&mut *conn, &row.id).await?;
                 let tags = tag::for_entity(&mut *conn, &row.id).await?;
                 let after = assemble(row.clone(), props, tags, &schema, &ctx, None)?;
 
-                audit::record(
-                    conn,
-                    entry(
-                        &actor,
-                        AuditAction::Restore,
-                        &row.case_id,
-                        &row.id,
-                        None,
-                        snapshot(&after),
-                    ),
-                )
-                .await?;
+                let mut entry = entry(
+                    &actor,
+                    AuditAction::Restore,
+                    &row.case_id,
+                    &row.id,
+                    None,
+                    snapshot(&after),
+                );
+                entry.batch_id = batch_id.clone();
+                audit::record(conn, entry).await?;
                 entity::save(conn, &row).await?;
+                if let Some(batch_id) = batch_id {
+                    super::relation::cascade_restore(conn, &batch_id, &now, &actor).await?;
+                }
                 Ok(after)
             })
         })
@@ -922,18 +956,110 @@ impl Services {
 
 /// One value that has passed the checks that do not need the Case.
 #[derive(Debug, Clone)]
-struct FlatValue {
-    prop: String,
-    ptype: PropertyType,
-    raw: String,
+pub(super) struct FlatValue {
+    pub(super) prop: String,
+    pub(super) ptype: PropertyType,
+    pub(super) raw: String,
 }
 
 /// One value, normalised against the Case's region.
+///
+/// Shared with the Relation use cases: a Relation's Properties are the same
+/// kind of thing as an Entity's and go through exactly this pipeline —
+/// [`check_shape`], [`require_required`], [`normalize_all`], [`plan_edit`] —
+/// so that `+48 601 234 567` means the same thing on an edge as it does on a
+/// node. Only the row type the value is finally written as differs, and that
+/// is the caller's job.
 #[derive(Debug, Clone)]
-struct Prepared {
-    prop: String,
-    ptype: PropertyType,
-    normalized: Normalized,
+pub(super) struct Prepared {
+    pub(super) prop: String,
+    pub(super) ptype: PropertyType,
+    pub(super) normalized: Normalized,
+}
+
+/// What the shared Property pipeline needs to know about a Schema.
+///
+/// Entity Schemas and relation Schemas declare their Properties in exactly
+/// the same shape ([`PropertyDef`]), and ticket 0001-10 requires a
+/// Relation's Properties to be "normalised on the same code path as Entity
+/// Properties". This trait is that code path's one point of variation: a
+/// second implementation of multiplicity checking, required-Property
+/// checking or edit planning would be two places for the rules to drift
+/// apart, which is the defect this exists to prevent.
+pub(super) trait PropertyHost {
+    /// The Schema's stable id, for error messages.
+    fn schema_id(&self) -> &str;
+    /// Every Property this Schema declares, in declaration order.
+    fn declared(&self) -> &[PropertyDef];
+    /// One Property by name.
+    fn declared_property(&self, name: &str) -> Option<&PropertyDef>;
+}
+
+impl PropertyHost for EntitySchema {
+    fn schema_id(&self) -> &str {
+        &self.id
+    }
+    fn declared(&self) -> &[PropertyDef] {
+        &self.properties
+    }
+    fn declared_property(&self, name: &str) -> Option<&PropertyDef> {
+        self.property(name)
+    }
+}
+
+impl PropertyHost for RelationSchema {
+    fn schema_id(&self) -> &str {
+        &self.id
+    }
+    fn declared(&self) -> &[PropertyDef] {
+        &self.properties
+    }
+    fn declared_property(&self, name: &str) -> Option<&PropertyDef> {
+        self.property(name)
+    }
+}
+
+/// One value already stored, as the edit planner needs to see it.
+///
+/// The planner works on this rather than on a row type so that it plans an
+/// edit to an Entity's Properties and an edit to a Relation's the same way,
+/// even though the two are stored in tables with different columns. The
+/// caller maps its own rows in and maps the plan's results back out.
+#[derive(Debug, Clone)]
+pub(super) struct ExistingValue {
+    /// The stored row's id, so the plan can name a specific value to delete.
+    pub(super) id: i64,
+    pub(super) prop: String,
+    pub(super) seq: i64,
+    pub(super) value: String,
+    pub(super) value_norm: Option<String>,
+}
+
+impl ExistingValue {
+    fn of(row: &PropRow) -> Self {
+        ExistingValue {
+            id: row.id,
+            prop: row.prop.clone(),
+            seq: row.seq,
+            value: row.value.clone(),
+            value_norm: row.value_norm.clone(),
+        }
+    }
+}
+
+impl Prepared {
+    /// The [`ExistingValue`] this value will look like once it is stored,
+    /// for the planner's own bookkeeping. `id` is zero because nothing has
+    /// been written yet and nothing reads it from here.
+    fn as_existing(&self, seq: i64) -> ExistingValue {
+        ExistingValue {
+            id: 0,
+            prop: self.prop.clone(),
+            seq,
+            value: self.normalized.raw.clone(),
+            value_norm: Some(self.normalized.value.clone()),
+        }
+    }
 }
 
 impl Prepared {
@@ -986,18 +1112,18 @@ impl Prepared {
 /// Property exists, it may hold this many values, and each one is a
 /// plausible length. Returns the values flattened into Schema-declared
 /// Property order, which is the order they are stored and read back in.
-fn check_shape(
-    schema: &EntitySchema,
+pub(super) fn check_shape(
+    schema: &impl PropertyHost,
     values: &PropertyValues,
 ) -> Result<Vec<FlatValue>, ServiceError> {
     for name in values.keys() {
-        if schema.property(name).is_none() {
+        if schema.declared_property(name).is_none() {
             return Err(unknown_property(schema, name));
         }
     }
 
     let mut flat = Vec::new();
-    for def in &schema.properties {
+    for def in schema.declared() {
         let Some(entered) = values.get(&def.name) else {
             continue;
         };
@@ -1026,8 +1152,12 @@ fn check_shape(
     Ok(flat)
 }
 
-fn check_multiplicity(schema: &EntitySchema, prop: &str, count: usize) -> Result<(), ServiceError> {
-    let Some(def) = schema.property(prop) else {
+fn check_multiplicity(
+    schema: &impl PropertyHost,
+    prop: &str,
+    count: usize,
+) -> Result<(), ServiceError> {
+    let Some(def) = schema.declared_property(prop) else {
         return Err(unknown_property(schema, prop));
     };
     if !def.multiple && count > 1 {
@@ -1035,7 +1165,7 @@ fn check_multiplicity(schema: &EntitySchema, prop: &str, count: usize) -> Result
             prop,
             format!(
                 "`{prop}` of `{}` holds one value, and {count} were given",
-                schema.id
+                schema.schema_id()
             ),
             format!("send a single value for `{prop}`"),
         ));
@@ -1057,16 +1187,20 @@ fn check_multiplicity(schema: &EntitySchema, prop: &str, count: usize) -> Result
 
 /// Checks that every required Property of the Schema has at least one value
 /// in the state described by `present`.
-fn require_required<'a>(
-    schema: &EntitySchema,
+pub(super) fn require_required<'a>(
+    schema: &impl PropertyHost,
     present: impl Iterator<Item = &'a str>,
 ) -> Result<(), ServiceError> {
     let names: Vec<&str> = present.collect();
-    for def in &schema.properties {
+    for def in schema.declared() {
         if def.required && !names.contains(&def.name.as_str()) {
             return Err(ServiceError::validation(
                 &def.name,
-                format!("`{}` requires at least one `{}`", schema.id, def.name),
+                format!(
+                    "`{}` requires at least one `{}`",
+                    schema.schema_id(),
+                    def.name
+                ),
                 format!(
                     "include `{}` in the properties, e.g. {{\"{}\": [\"…\"]}}",
                     def.name, def.name
@@ -1077,11 +1211,11 @@ fn require_required<'a>(
     Ok(())
 }
 
-fn unknown_property(schema: &EntitySchema, name: &str) -> ServiceError {
-    let known: Vec<&str> = schema.properties.iter().map(|p| p.name.as_str()).collect();
+fn unknown_property(schema: &impl PropertyHost, name: &str) -> ServiceError {
+    let known: Vec<&str> = schema.declared().iter().map(|p| p.name.as_str()).collect();
     ServiceError::validation(
         name,
-        format!("`{}` has no property named `{name}`", schema.id),
+        format!("`{}` has no property named `{name}`", schema.schema_id()),
         format!("use one of: {}", known.join(", ")),
     )
 }
@@ -1090,7 +1224,7 @@ fn unknown_property(schema: &EntitySchema, name: &str) -> ServiceError {
 /// national phone number becomes E.164, an email is folded, a date becomes
 /// a span with a precision, and a bad check digit becomes a warning rather
 /// than a refusal.
-fn normalize_all(
+pub(super) fn normalize_all(
     flat: Vec<FlatValue>,
     ctx: &NormalizeContext,
 ) -> Result<Vec<Prepared>, ServiceError> {
@@ -1109,7 +1243,7 @@ fn normalize_all(
         .collect()
 }
 
-fn validate_id(id: &str) -> Result<String, ServiceError> {
+pub(super) fn validate_id(id: &str) -> Result<String, ServiceError> {
     let trimmed = id.trim();
     if vesica_store::is_valid_id(trimmed) {
         Ok(trimmed.to_string())
@@ -1123,7 +1257,7 @@ fn validate_id(id: &str) -> Result<String, ServiceError> {
     }
 }
 
-fn validate_caption(caption: Option<&str>) -> Result<Option<String>, ServiceError> {
+pub(super) fn validate_caption(caption: Option<&str>) -> Result<Option<String>, ServiceError> {
     let Some(caption) = caption else {
         return Ok(None);
     };
@@ -1134,7 +1268,7 @@ fn validate_caption(caption: Option<&str>) -> Result<Option<String>, ServiceErro
     Ok(Some(require_caption(&trimmed)?))
 }
 
-fn require_caption(caption: &str) -> Result<String, ServiceError> {
+pub(super) fn require_caption(caption: &str) -> Result<String, ServiceError> {
     let trimmed = vesica_core::folding::collapse_whitespace(caption);
     if trimmed.is_empty() {
         return Err(ServiceError::validation(
@@ -1158,36 +1292,49 @@ fn require_caption(caption: &str) -> Result<String, ServiceError> {
 // Editing properties
 // ---------------------------------------------------------------------------
 
+/// One value the plan will write: the normalised value and the `seq` it
+/// takes within its Property. Turning it into a storable row is the
+/// caller's job, because an Entity's Properties and a Relation's live in
+/// tables with different columns.
+#[derive(Debug, Clone)]
+pub(super) struct PlannedValue {
+    pub(super) value: Prepared,
+    pub(super) seq: i64,
+}
+
 /// What an edit will do, worked out in full before anything is written so
-/// that an edit which would leave the Entity invalid is refused whole.
+/// that an edit which would leave the Entity or Relation invalid is refused
+/// whole.
 #[derive(Debug, Default)]
-struct EditPlan {
+pub(super) struct EditPlan {
     /// Properties whose every value goes (a `replace`).
-    clear_props: Vec<String>,
+    pub(super) clear_props: Vec<String>,
     /// Individual stored rows that go (a `remove`).
-    delete_rows: Vec<i64>,
-    /// Values to write.
-    inserts: Vec<NewProp>,
-    /// The same values as rows, for building the resulting Entity.
-    insert_rows: Vec<PropRow>,
+    pub(super) delete_rows: Vec<i64>,
+    /// Values to write, each with the `seq` it takes.
+    pub(super) inserts: Vec<PlannedValue>,
 }
 
 impl EditPlan {
-    fn is_noop(&self) -> bool {
+    pub(super) fn is_noop(&self) -> bool {
         self.clear_props.is_empty() && self.delete_rows.is_empty() && self.inserts.is_empty()
     }
 }
 
-fn plan_edit(
-    schema: &EntitySchema,
-    existing: &[PropRow],
+/// Works out, without writing anything, what an [`EditProperties`] request
+/// does to a set of stored values — and refuses the whole request if the
+/// result would not satisfy its Schema.
+///
+/// Shared by the Entity and Relation use cases; see [`PropertyHost`].
+pub(super) fn plan_edit(
+    schema: &impl PropertyHost,
+    existing: &[ExistingValue],
     request: &EditProperties,
     ctx: &NormalizeContext,
-    entity_id: &str,
 ) -> Result<EditPlan, ServiceError> {
     for values in [&request.replace, &request.remove, &request.add] {
         for name in values.keys() {
-            if schema.property(name).is_none() {
+            if schema.declared_property(name).is_none() {
                 return Err(unknown_property(schema, name));
             }
         }
@@ -1195,7 +1342,7 @@ fn plan_edit(
 
     let mut plan = EditPlan::default();
     // Which stored rows survive, per property, in order.
-    let mut surviving: BTreeMap<String, Vec<PropRow>> = BTreeMap::new();
+    let mut surviving: BTreeMap<String, Vec<ExistingValue>> = BTreeMap::new();
     for row in existing {
         surviving
             .entry(row.prop.clone())
@@ -1218,7 +1365,7 @@ fn plan_edit(
         };
         for raw in values {
             let normalized = schema
-                .property(prop)
+                .declared_property(prop)
                 .and_then(|def| def.ptype.normalize(raw, ctx).ok())
                 .map(|n| n.value);
             if let Some(index) = rows.iter().position(|row| {
@@ -1252,7 +1399,7 @@ fn plan_edit(
 
     for (prop, values) in incoming {
         let ptype = schema
-            .property(&prop)
+            .declared_property(&prop)
             .map(|def| def.ptype)
             .ok_or_else(|| unknown_property(schema, &prop))?;
         let flat: Vec<FlatValue> = values
@@ -1285,12 +1432,11 @@ fn plan_edit(
             .map_or(0, |max| max + 1);
         for (offset, value) in prepared.into_iter().enumerate() {
             let seq = base + offset as i64;
-            plan.inserts.push(value.as_new_prop(entity_id, seq));
-            plan.insert_rows.push(value.as_prop_row(entity_id, seq));
             surviving
                 .entry(prop.clone())
                 .or_default()
-                .push(value.as_prop_row(entity_id, seq));
+                .push(value.as_existing(seq));
+            plan.inserts.push(PlannedValue { value, seq });
         }
     }
 
@@ -1469,7 +1615,7 @@ fn derive_caption(schema: &EntitySchema, prepared: &[Prepared]) -> String {
 
 /// The `seq` a value takes within its own Property, given the flattened
 /// order every value was prepared in.
-fn seq_within(prepared: &[Prepared], index: usize) -> i64 {
+pub(super) fn seq_within(prepared: &[Prepared], index: usize) -> i64 {
     prepared[..index]
         .iter()
         .filter(|earlier| earlier.prop == prepared[index].prop)
@@ -1516,7 +1662,7 @@ pub(super) async fn live_entity(
 
 /// The normalisation context for values recorded in a Case that must exist
 /// and be visible. This is what the Case's default region is *for*.
-async fn live_case_context(
+pub(super) async fn live_case_context(
     conn: &mut SqliteConnection,
     case_id: &str,
 ) -> Result<NormalizeContext, ServiceError> {
@@ -1529,7 +1675,10 @@ async fn live_case_context(
 
 /// As [`live_case_context`], for a Case that is already known to exist
 /// because something inside it was just read.
-async fn case_context<'e, E>(exec: E, case_id: &str) -> Result<NormalizeContext, ServiceError>
+pub(super) async fn case_context<'e, E>(
+    exec: E,
+    case_id: &str,
+) -> Result<NormalizeContext, ServiceError>
 where
     E: sqlx::sqlite::SqliteExecutor<'e>,
 {
@@ -1599,7 +1748,7 @@ pub(super) fn entry(
 /// Turns the primary-key violation a caller-supplied duplicate id causes
 /// into something that names the problem, and leaves every other store
 /// error alone.
-fn duplicate_id_conflict(id: &str, e: vesica_store::StoreError) -> ServiceError {
+pub(super) fn duplicate_id_conflict(id: &str, e: vesica_store::StoreError) -> ServiceError {
     let message = e.to_string();
     if message.contains("UNIQUE constraint failed") {
         ServiceError::Conflict {

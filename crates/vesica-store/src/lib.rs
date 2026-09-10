@@ -10,10 +10,11 @@
 //!   crate: write/write lock contention is structurally impossible, not
 //!   merely unlikely.
 //! - [`repo`]: persistence for each aggregate — `repo::case`,
-//!   `repo::audit`, `repo::entity` (including `entity_prop`) and
-//!   `repo::tag` as transaction-scoped functions (so a change and its audit
-//!   entry commit together), `RelationRepo` and `SourceRepo` still as
-//!   traits with one SQLite implementation each.
+//!   `repo::audit`, `repo::entity` (including `entity_prop`),
+//!   `repo::relation` (including `relation_prop`) and `repo::tag` as
+//!   transaction-scoped functions (so a change and its audit entry commit
+//!   together), `SourceRepo` still as a trait with one SQLite
+//!   implementation.
 //! - [`graph`]: the bounded neighbourhood-traversal recursive CTE.
 //! - [`testing`]: the shared harness later tickets use to stand up a real
 //!   store in a test.
@@ -21,8 +22,7 @@
 //! Depends on `vesica-core` for domain types; no other crate in this
 //! workspace depends on it except through the API and MCP layers.
 //!
-//! Not yet here (later tickets): `relation_prop` read-write (needs
-//! `vesica-core` validation/normalisation), `BlobRepo`, `MatchRepo`,
+//! Not yet here (later tickets): `BlobRepo`, `MatchRepo`,
 //! FTS5 query helpers (the triggers that keep `entity_fts` in sync already
 //! exist as of migration `0005_search.sql` and need no application code),
 //! shortest-path/connected-components traversals beyond the neighbourhood

@@ -54,6 +54,7 @@
 mod case;
 mod entity;
 mod error;
+mod relation;
 mod slug;
 mod tag;
 
@@ -66,6 +67,10 @@ pub use entity::{
     EntitySummary, PropertyValue, PropertyWarning, PurgeEntity, UpdateEntity,
 };
 pub use error::{Actor, ServiceError};
+pub use relation::{
+    CreateRelation, Endpoint, EndpointRole, EndpointWarning, Interval, Relation, RelationList,
+    RelationQuery, RelationSummary, RelationWarningCode, SetInterval, UpdateRelation,
+};
 pub use tag::{TagList, TagSummary};
 
 use std::sync::Arc;

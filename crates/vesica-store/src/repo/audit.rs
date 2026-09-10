@@ -227,6 +227,69 @@ where
     Ok(entries)
 }
 
+/// The `batch_id` of the most recent entry recording `action` against one
+/// target, if that entry carried one.
+///
+/// This is how a cascade is undone. Deleting an Entity soft-deletes every
+/// Relation touching it, and every one of those changes is recorded under
+/// the same `batch_id` as the Entity's own delete entry — which is exactly
+/// what `04-data-model.md` says a batch is for: "Groups related changes (an
+/// import, a merge) for undo". Restoring the Entity then asks this function
+/// which batch took it down and [`targets_in_batch`] what else went with
+/// it, so that a Relation deleted independently *before* the Entity — a
+/// different batch, or none — stays deleted.
+///
+/// Reading the trail to drive a restore does not weaken its append-only
+/// rule: nothing here writes.
+pub async fn latest_batch_for<'e, E>(
+    exec: E,
+    target_kind: &str,
+    target_id: &str,
+    action: &str,
+) -> Result<Option<String>, StoreError>
+where
+    E: SqliteExecutor<'e>,
+{
+    let batch: Option<Option<String>> = sqlx::query_scalar(
+        "SELECT batch_id FROM audit_log \
+         WHERE target_kind = ? AND target_id = ? AND action = ? \
+         ORDER BY at DESC, id DESC LIMIT 1",
+    )
+    .bind(target_kind)
+    .bind(target_id)
+    .bind(action)
+    .fetch_optional(exec)
+    .await?;
+    Ok(batch.flatten())
+}
+
+/// The ids of every target of one kind that one batch recorded `action`
+/// against, oldest first, bounded by [`MAX_LIST_LIMIT`].
+///
+/// See [`latest_batch_for`] for what this is for.
+pub async fn targets_in_batch<'e, E>(
+    exec: E,
+    batch_id: &str,
+    target_kind: &str,
+    action: &str,
+) -> Result<Vec<String>, StoreError>
+where
+    E: SqliteExecutor<'e>,
+{
+    let ids: Vec<String> = sqlx::query_scalar(
+        "SELECT target_id FROM audit_log \
+         WHERE batch_id = ? AND target_kind = ? AND action = ? \
+         ORDER BY id ASC LIMIT ?",
+    )
+    .bind(batch_id)
+    .bind(target_kind)
+    .bind(action)
+    .bind(MAX_LIST_LIMIT)
+    .fetch_all(exec)
+    .await?;
+    Ok(ids)
+}
+
 /// The most recent entries touching anything in one case, newest first,
 /// bounded by [`MAX_LIST_LIMIT`] regardless of `limit`. Entries whose
 /// `case_id` is null (targets that belong to no case) are not included.
@@ -321,6 +384,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(entries.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn a_batch_names_everything_one_change_took_down_and_nothing_else() {
+        let store = test_store().await.unwrap();
+
+        // An earlier, independent deletion of one relation.
+        let mut alone = entry("delete");
+        alone.target_kind = "relation".into();
+        alone.target_id = "rel-alone".into();
+        alone.batch_id = Some("batch-earlier".into());
+        record_one(&store.db, alone).await;
+
+        // Then the entity goes, taking two relations with it.
+        let mut entity = entry("delete");
+        entity.batch_id = Some("batch-cascade".into());
+        record_one(&store.db, entity).await;
+        for id in ["rel-a", "rel-b"] {
+            let mut cascaded = entry("delete");
+            cascaded.target_kind = "relation".into();
+            cascaded.target_id = id.into();
+            cascaded.batch_id = Some("batch-cascade".into());
+            record_one(&store.db, cascaded).await;
+        }
+
+        let batch = latest_batch_for(store.db.read_pool(), "entity", "entity-1", "delete")
+            .await
+            .unwrap();
+        assert_eq!(batch.as_deref(), Some("batch-cascade"));
+
+        let targets = targets_in_batch(store.db.read_pool(), "batch-cascade", "relation", "delete")
+            .await
+            .unwrap();
+        assert_eq!(targets, vec!["rel-a".to_string(), "rel-b".to_string()]);
+
+        // An entry with no batch, and an action nobody recorded, both come
+        // back empty rather than guessing.
+        record_one(&store.db, entry("update")).await;
+        assert_eq!(
+            latest_batch_for(store.db.read_pool(), "entity", "entity-1", "update")
+                .await
+                .unwrap(),
+            None
+        );
+        assert!(
+            targets_in_batch(store.db.read_pool(), "batch-cascade", "relation", "restore")
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     /// An entry with a payload, so redaction has something to remove.
